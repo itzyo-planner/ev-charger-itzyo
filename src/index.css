@@ -7,3 +7,50 @@ html, body, #root {
   margin: 0;
   padding: 0;
 }
+
+/* Safe Area 지원 (노치/홈 인디케이터 대응) */
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+}
+
+/* 터치 반응 효과 */
+.touch-btn {
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.1s ease, opacity 0.1s ease;
+}
+.touch-btn:active {
+  transform: scale(0.96);
+  opacity: 0.85;
+}
+
+/* 체크박스/셀렉트 모바일 크기 확대 (최소 44px 터치 타겟) */
+@media (max-width: 767px) {
+  select, input[type="text"] {
+    font-size: 16px !important; /* iOS 자동 줌 방지 */
+    min-height: 44px;
+  }
+  input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+/* Leaflet 팝업 모바일 최적화 */
+.leaflet-popup-content-wrapper {
+  border-radius: 12px !important;
+}
+.leaflet-popup-content {
+  margin: 10px 12px !important;
+}
+
+/* 스크롤바 스타일 */
+.overflow-y-auto::-webkit-scrollbar {
+  width: 4px;
+}
+.overflow-y-auto::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 2px;
+}

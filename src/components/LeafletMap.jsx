@@ -49,6 +49,7 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
   const myLocationMarkerRef = useRef(null);
   const fetchControllerRef = useRef(null);
   const cachedStationsRef = useRef([]);
+  const debounceTimerRef = useRef(null);
 
   // 필터링
   const filterStations = useCallback((stations) => {
@@ -178,6 +179,11 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
       center: [center.lat, center.lng],
       zoom: 10,
       zoomControl: false,
+      tap: true,
+      tapTolerance: 15,
+      touchZoom: true,
+      dragging: true,
+      bounceAtZoomLimits: false,
     });
 
     // 줌 컨트롤 우측 배치
@@ -224,12 +230,16 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
       fetchAndRender();
     }
 
-    // 지도 이동/줌 완료 시 API 호출
+    // 지도 이동/줌 완료 시 API 호출 (디바운스 500ms — 빠른 연속 이동 시 중복 호출 방지)
     map.on('moveend', () => {
-      fetchAndRender();
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = setTimeout(() => {
+        fetchAndRender();
+      }, 500);
     });
 
     return () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       map.remove();
       mapInstanceRef.current = null;
     };

@@ -52,7 +52,7 @@ export default function App() {
   }, []);
 
   return (
-    <div className="relative h-[100dvh] w-screen overflow-hidden bg-gray-50">
+    <div className="relative h-[100dvh] w-screen overflow-hidden bg-gray-50" style={{ paddingTop: 'var(--sat)', paddingBottom: 'var(--sab)' }}>
       {/* ===== 지도 영역 (항상 전체 화면) ===== */}
       <div className="absolute inset-0 z-0">
         <LeafletMap
@@ -100,9 +100,10 @@ export default function App() {
       {/* ===== 모바일: 하단 검색 버튼 ===== */}
       <button
         onClick={() => setSidebarOpen(true)}
-        className={`md:hidden fixed bottom-20 left-1/2 -translate-x-1/2 z-30 bg-blue-600 text-white px-6 py-3 rounded-full shadow-xl text-sm font-semibold active:bg-blue-700 transition-all ${
+        className={`touch-btn md:hidden fixed left-1/2 -translate-x-1/2 z-30 bg-blue-600 text-white px-6 py-3.5 rounded-full shadow-xl text-sm font-semibold active:bg-blue-700 transition-all ${
           sidebarOpen ? 'translate-y-20 opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'
         }`}
+        style={{ bottom: 'calc(80px + var(--sab))' }}
       >
         <span className="flex items-center gap-2">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

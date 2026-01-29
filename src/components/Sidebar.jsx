@@ -178,13 +178,13 @@ export default function Sidebar({ filters, onFiltersChange, stations, selectedSt
                 if (onSearch) onSearch();
               }}
               disabled={loading}
-              className="flex-1 bg-blue-600 text-white py-2.5 rounded-full text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="touch-btn flex-1 bg-blue-600 text-white py-3 rounded-full text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? '조회 중...' : '검색하기'}
             </button>
             <button
               onClick={resetFilters}
-              className="flex-1 border border-blue-300 text-blue-600 py-2.5 rounded-full text-sm font-semibold hover:bg-blue-50 transition-colors"
+              className="touch-btn flex-1 border border-blue-300 text-blue-600 py-3 rounded-full text-sm font-semibold hover:bg-blue-50 transition-colors"
             >
               초기화
             </button>
@@ -193,9 +193,9 @@ export default function Sidebar({ filters, onFiltersChange, stations, selectedSt
           {/* 운영기관 체크박스 */}
           <div>
             <label className="block text-sm font-semibold text-gray-800 mb-2">운영기관</label>
-            <div className="grid grid-cols-2 gap-1.5">
+            <div className="grid grid-cols-2 gap-2">
               {OPERATORS.map((op) => (
-                <label key={op.id} className="flex items-center gap-1.5 text-xs text-gray-700 cursor-pointer">
+                <label key={op.id} className="touch-btn flex items-center gap-2 text-sm md:text-xs text-gray-700 cursor-pointer py-1">
                   <input
                     type="checkbox"
                     checked={filters.operator.includes(op.id)}
@@ -227,7 +227,7 @@ export default function Sidebar({ filters, onFiltersChange, stations, selectedSt
                   <button
                     key={s.id}
                     onClick={() => onSelectStation(s)}
-                    className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                    className={`touch-btn w-full text-left p-3.5 rounded-lg border transition-colors ${
                       selectedStation?.id === s.id
                         ? 'border-blue-500 bg-blue-50'
                         : 'border-gray-200 hover:bg-gray-50'

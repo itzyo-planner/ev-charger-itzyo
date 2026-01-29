@@ -15,7 +15,7 @@ export default function StatusLegend() {
   ];
 
   return (
-    <div className="absolute bottom-2 md:bottom-4 left-1/2 -translate-x-1/2 z-20 bg-white/95 backdrop-blur rounded-lg shadow-lg px-2.5 py-1.5 md:px-5 md:py-2.5 flex items-center gap-2 md:gap-5 text-[10px] md:text-xs max-w-[96vw] overflow-x-auto">
+    <div className="absolute left-1/2 -translate-x-1/2 z-20 bg-white/95 backdrop-blur rounded-lg shadow-lg px-2.5 py-1.5 md:px-5 md:py-2.5 flex items-center gap-2 md:gap-5 text-[10px] md:text-xs max-w-[96vw] overflow-x-auto" style={{ bottom: 'calc(8px + var(--sab))' }}>
       {statusItems.map((item) => (
         <div key={item.label} className="flex items-center gap-1 md:gap-1.5 shrink-0">
           <svg width="10" height="12" viewBox="0 0 44 52" className="md:w-[14px] md:h-[17px]">
