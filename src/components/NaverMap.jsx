@@ -1,0 +1,250 @@
+import { useEffect, useRef, useCallback } from 'react'
+import { CHARGER_TYPES, fetchChargersInBounds, filterStationsInBounds } from '../data/mockChargers'
+
+// 상태별 마커 색상
+const STATUS_COLORS = {
+  available: '#3B82F6',
+  in_use: '#22C55E',
+  unavailable: '#6B7280',
+  unknown: '#F97316',
+  restricted: '#A855F7',
+};
+
+// 네이버맵 줌 레벨을 카카오맵 호환 레벨로 변환 (바운드 필터링용)
+function naverZoomToLevel(zoom) {
+  // 네이버맵 zoom: 높을수록 확대 (6~21)
+  // 카카오맵 level: 높을수록 축소 (1~14)
+  // 대략적 변환: level ≈ 21 - zoom
+  return Math.max(1, Math.min(14, 21 - zoom));
+}
+
+// SVG 마커 이미지 생성
+function createMarkerSvg(color, count) {
+  return `
+    <svg xmlns="http://www.w3.org/2000/svg" width="44" height="52" viewBox="0 0 44 52">
+      <defs>
+        <filter id="shadow" x="-20%" y="-10%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="0.25"/>
+        </filter>
+      </defs>
+      <path d="M22 48 C22 48 40 30 40 18 C40 8 32 0 22 0 C12 0 4 8 4 18 C4 30 22 48 22 48Z"
+        fill="${color}" filter="url(#shadow)" stroke="white" stroke-width="2"/>
+      <text x="22" y="22" text-anchor="middle" fill="white" font-size="${count > 99 ? 10 : 12}" font-weight="bold" font-family="Arial">${count}</text>
+    </svg>`;
+}
+
+export default function NaverMap({ center, filters, selectedStation, onSelectStation, onMapUpdate, apiStations }) {
+  const mapRef = useRef(null);
+  const mapInstanceRef = useRef(null);
+  const markersRef = useRef([]);
+  const infoWindowRef = useRef(null);
+
+  // 마커 필터링 함수
+  const filterStations = useCallback((stations) => {
+    return stations.filter((s) => {
+      if (filters.chargerType.length > 0 && !filters.chargerType.includes('all')) {
+        if (!filters.chargerType.includes(s.chargerType)) return false;
+      }
+      if (filters.operator.length > 0 && !filters.operator.includes('all')) {
+        const opFilter = filters.operator;
+        const matchById = opFilter.includes(s.operatorId);
+        const matchByField = opFilter.includes(s.operator);
+        if (!matchById && !matchByField) return false;
+      }
+      if (filters.category !== 'all' && s.category !== filters.category) return false;
+      if (filters.keyword) {
+        const kw = filters.keyword.toLowerCase();
+        if (!s.name.toLowerCase().includes(kw) && !s.address.toLowerCase().includes(kw)) return false;
+      }
+      return true;
+    });
+  }, [filters]);
+
+  // 마커 업데이트
+  const updateMarkers = useCallback(() => {
+    const map = mapInstanceRef.current;
+    const naver = window.naver;
+    if (!map || !naver) return;
+
+    // 기존 마커 제거
+    markersRef.current.forEach((m) => m.setMap(null));
+    markersRef.current = [];
+
+    // 기존 인포윈도우 닫기
+    if (infoWindowRef.current) {
+      infoWindowRef.current.close();
+    }
+
+    const mapCenter = map.getCenter();
+    const zoom = map.getZoom();
+    const level = naverZoomToLevel(zoom);
+
+    let allStations;
+    if (apiStations && apiStations.length > 0) {
+      allStations = filterStationsInBounds(apiStations, mapCenter.lat(), mapCenter.lng(), level);
+    } else {
+      allStations = fetchChargersInBounds(mapCenter.lat(), mapCenter.lng(), level);
+    }
+
+    const filtered = filterStations(allStations);
+    onMapUpdate(filtered);
+
+    filtered.forEach((station) => {
+      const position = new naver.maps.LatLng(station.lat, station.lng);
+      const color = STATUS_COLORS[station.status] || STATUS_COLORS.unknown;
+
+      const marker = new naver.maps.Marker({
+        position,
+        map,
+        icon: {
+          content: `<div style="cursor:pointer;">${createMarkerSvg(color, station.chargerCount)}</div>`,
+          size: new naver.maps.Size(44, 52),
+          anchor: new naver.maps.Point(22, 52),
+        },
+      });
+
+      // 인포윈도우 내용
+      const typeName = CHARGER_TYPES.find(t => t.id === station.chargerType)?.label || station.chargerType;
+      const statusLabel = {
+        available: '사용가능',
+        in_use: '사용중',
+        unavailable: '사용불가',
+        unknown: '상태미확인',
+        restricted: '이용자제한',
+      }[station.status] || '알 수 없음';
+      const operatorLabel = station.operator || '정보없음';
+
+      const contentHtml = `
+        <div style="
+          background: white;
+          border-radius: 12px;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+          padding: 14px 16px;
+          min-width: 240px;
+          max-width: 300px;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        ">
+          <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:6px;">
+            <strong style="font-size:14px; color:#1a1a2e; flex:1; margin-right:8px;">${station.name}</strong>
+            <span style="
+              font-size:11px;
+              padding: 2px 8px;
+              border-radius: 10px;
+              background: ${color}20;
+              color: ${color};
+              font-weight: 600;
+              white-space: nowrap;
+            ">${statusLabel}</span>
+          </div>
+          <p style="font-size:12px; color:#888; margin:0 0 6px 0;">${station.address}</p>
+          <div style="display:flex; gap:6px; flex-wrap:wrap;">
+            <span style="font-size:11px; background:#f1f5f9; padding:2px 8px; border-radius:4px; color:#475569;">${typeName}</span>
+            ${station.power ? `<span style="font-size:11px; background:#f1f5f9; padding:2px 8px; border-radius:4px; color:#475569;">${station.power}kW</span>` : ''}
+            <span style="font-size:11px; background:#f1f5f9; padding:2px 8px; border-radius:4px; color:#475569;">${station.chargerCount}기</span>
+            <span style="font-size:11px; background:#dbeafe; padding:2px 8px; border-radius:4px; color:#1d4ed8;">${operatorLabel}</span>
+          </div>
+        </div>
+      `;
+
+      const infoWindow = new naver.maps.InfoWindow({
+        content: contentHtml,
+        borderWidth: 0,
+        backgroundColor: 'transparent',
+        disableAnchor: true,
+        pixelOffset: new naver.maps.Point(0, -10),
+      });
+
+      naver.maps.Event.addListener(marker, 'click', () => {
+        if (infoWindowRef.current) {
+          infoWindowRef.current.close();
+        }
+        infoWindow.open(map, marker);
+        infoWindowRef.current = infoWindow;
+        onSelectStation(station);
+      });
+
+      markersRef.current.push(marker);
+    });
+  }, [filterStations, onMapUpdate, onSelectStation, apiStations]);
+
+  // 지도 초기화
+  useEffect(() => {
+    const naver = window.naver;
+    if (!naver || !naver.maps) {
+      if (mapRef.current) {
+        mapRef.current.innerHTML = `
+          <div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#e8edf3;color:#555;font-family:sans-serif;">
+            <div style="font-size:48px;margin-bottom:16px;">🗺️</div>
+            <p style="font-size:18px;font-weight:600;margin-bottom:8px;">네이버 지도 API 키가 필요합니다</p>
+            <p style="font-size:13px;color:#888;text-align:center;line-height:1.6;">
+              index.html에서 네이버 지도 SDK가 올바르게 로드되었는지 확인해주세요.
+            </p>
+          </div>`;
+      }
+      return;
+    }
+
+    const map = new naver.maps.Map(mapRef.current, {
+      center: new naver.maps.LatLng(center.lat, center.lng),
+      zoom: 13,
+      zoomControl: true,
+      zoomControlOptions: {
+        position: naver.maps.Position.TOP_RIGHT,
+      },
+    });
+
+    mapInstanceRef.current = map;
+
+    // 현재 위치로 이동
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition((pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        map.setCenter(new naver.maps.LatLng(lat, lng));
+        updateMarkers();
+      }, () => {
+        updateMarkers();
+      });
+    } else {
+      updateMarkers();
+    }
+
+    // 지도 이동/줌 완료 시 마커 갱신
+    naver.maps.Event.addListener(map, 'idle', () => {
+      updateMarkers();
+    });
+
+    // 빈 영역 클릭 시 인포윈도우 닫기
+    naver.maps.Event.addListener(map, 'click', () => {
+      if (infoWindowRef.current) {
+        infoWindowRef.current.close();
+        infoWindowRef.current = null;
+      }
+    });
+
+    return () => {
+      // cleanup
+      markersRef.current.forEach((m) => m.setMap(null));
+      markersRef.current = [];
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 필터 변경 또는 API 데이터 변경 시 마커 재렌더링
+  useEffect(() => {
+    updateMarkers();
+  }, [filters, updateMarkers, apiStations]);
+
+  // 선택된 충전소로 이동
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    const naver = window.naver;
+    if (map && naver?.maps && selectedStation) {
+      map.setCenter(new naver.maps.LatLng(selectedStation.lat, selectedStation.lng));
+      map.setZoom(15);
+    }
+  }, [selectedStation]);
+
+  return (
+    <div ref={mapRef} className="w-full h-full" />
+  );
+}

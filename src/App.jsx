@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import Sidebar from './components/Sidebar'
-import KakaoMap from './components/KakaoMap'
+import NaverMap from './components/NaverMap'
 import StatusLegend from './components/StatusLegend'
 import { fetchChargers } from './data/api'
 
@@ -125,7 +125,7 @@ export default function App() {
           </div>
         )}
 
-        <KakaoMap
+        <NaverMap
           center={mapCenter}
           filters={filters}
           selectedStation={selectedStation}
