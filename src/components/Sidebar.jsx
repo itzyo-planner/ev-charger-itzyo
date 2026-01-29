@@ -48,12 +48,12 @@ export default function Sidebar({ filters, onFiltersChange, stations, selectedSt
     : [{ id: '', label: '시/군' }];
 
   return (
-    <div className="h-full bg-white border-r border-gray-200 flex flex-col">
+    <div className="h-full bg-white md:border-r border-gray-200 flex flex-col">
       {/* 탭 */}
       <div className="flex border-b border-gray-200">
         <button
           onClick={() => setActiveTab('search')}
-          className={`flex-1 py-3 text-sm font-medium border-b-2 transition-colors ${
+          className={`flex-1 py-3.5 md:py-3 text-sm font-medium border-b-2 transition-colors ${
             activeTab === 'search'
               ? 'text-blue-600 border-blue-600'
               : 'text-gray-400 border-transparent hover:text-gray-600'
@@ -63,7 +63,7 @@ export default function Sidebar({ filters, onFiltersChange, stations, selectedSt
         </button>
         <button
           onClick={() => setActiveTab('favorites')}
-          className={`flex-1 py-3 text-sm font-medium border-b-2 transition-colors ${
+          className={`flex-1 py-3.5 md:py-3 text-sm font-medium border-b-2 transition-colors ${
             activeTab === 'favorites'
               ? 'text-blue-600 border-blue-600'
               : 'text-gray-400 border-transparent hover:text-gray-600'
