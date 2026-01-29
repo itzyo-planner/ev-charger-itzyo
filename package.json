@@ -1,0 +1,10 @@
+{
+  "name": "ev-charger-itzyo",
+  "version": "1.0.0",
+  "description": "EV Charger project",
+  "scripts": {
+    "build": "cp -r src/* dist/",
+    "dev": "npx serve dist"
+  },
+  "private": true
+}
