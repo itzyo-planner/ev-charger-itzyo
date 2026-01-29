@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 import Sidebar from './components/Sidebar'
-import NaverMap from './components/NaverMap'
+import KakaoMap from './components/KakaoMap'
 import StatusLegend from './components/StatusLegend'
 
 export default function App() {
@@ -101,7 +101,7 @@ export default function App() {
           </div>
         )}
 
-        <NaverMap
+        <KakaoMap
           center={mapCenter}
           filters={filters}
           selectedStation={selectedStation}

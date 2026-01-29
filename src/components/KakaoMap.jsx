@@ -1,14 +1,14 @@
-import { useEffect, useRef, useCallback, useState } from 'react'
-import { CHARGER_TYPES, fetchChargersInBounds, filterStationsInBounds } from '../data/mockChargers'
-import { fetchChargers } from '../data/api'
+import { useEffect, useRef, useCallback } from 'react'
+import { CHARGER_TYPES } from '../data/mockChargers'
+import { fetchChargersInMapBounds } from '../data/api'
 
-// 상태별 마커 색상
+// 상태별 마커 색상 — 사용가능: 파란색, 사용중: 빨간색
 const STATUS_COLORS = {
-  available: '#3B82F6',   // 파란색 - 사용 가능
-  in_use: '#22C55E',      // 초록색 - 사용 중
-  unavailable: '#6B7280', // 회색 - 사용 불가
-  unknown: '#F97316',     // 주황색 - 상태미확인
-  restricted: '#A855F7',  // 보라색 - 이용자제한
+  available: '#3B82F6',   // 파란색
+  in_use: '#EF4444',      // 빨간색
+  unavailable: '#6B7280', // 회색
+  unknown: '#F97316',     // 주황색
+  restricted: '#A855F7',  // 보라색
 };
 
 // SVG 마커 이미지 생성
@@ -27,11 +27,13 @@ function createMarkerSvg(color, count) {
   return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
 }
 
-export default function KakaoMap({ center, filters, selectedStation, onSelectStation, onMapUpdate, apiStations }) {
+export default function KakaoMap({ center, filters, selectedStation, onSelectStation, onMapUpdate, onLoadingChange, onErrorChange }) {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markersRef = useRef([]);
   const overlaysRef = useRef([]);
+  const fetchControllerRef = useRef(null);
+  const cachedStationsRef = useRef([]);
 
   // 마커 필터링 함수
   const filterStations = useCallback((stations) => {
@@ -40,7 +42,6 @@ export default function KakaoMap({ center, filters, selectedStation, onSelectSta
         if (!filters.chargerType.includes(s.chargerType)) return false;
       }
       if (filters.operator.length > 0 && !filters.operator.includes('all')) {
-        // API 데이터에서는 operator가 문자열(운영기관명)이므로 ID 또는 이름으로 필터
         const opFilter = filters.operator;
         const matchById = opFilter.includes(s.operatorId);
         const matchByField = opFilter.includes(s.operator);
@@ -55,10 +56,11 @@ export default function KakaoMap({ center, filters, selectedStation, onSelectSta
     });
   }, [filters]);
 
-  // 마커 업데이트
-  const updateMarkers = useCallback(() => {
+  // 마커 렌더링
+  const renderMarkers = useCallback((stations) => {
     const map = mapInstanceRef.current;
-    if (!map) return;
+    const kakao = window.kakao;
+    if (!map || !kakao) return;
 
     // 기존 마커/오버레이 제거
     markersRef.current.forEach((m) => m.setMap(null));
@@ -66,22 +68,8 @@ export default function KakaoMap({ center, filters, selectedStation, onSelectSta
     markersRef.current = [];
     overlaysRef.current = [];
 
-    const mapCenter = map.getCenter();
-    const level = map.getLevel();
-
-    let allStations;
-    if (apiStations && apiStations.length > 0) {
-      // API 데이터가 있으면 바운드 필터링 후 사용
-      allStations = filterStationsInBounds(apiStations, mapCenter.getLat(), mapCenter.getLng(), level);
-    } else {
-      // API 데이터 없으면 mock 데이터 fallback
-      allStations = fetchChargersInBounds(mapCenter.getLat(), mapCenter.getLng(), level);
-    }
-
-    const filtered = filterStations(allStations);
+    const filtered = filterStations(stations);
     onMapUpdate(filtered);
-
-    const kakao = window.kakao;
 
     filtered.forEach((station) => {
       const position = new kakao.maps.LatLng(station.lat, station.lng);
@@ -99,7 +87,6 @@ export default function KakaoMap({ center, filters, selectedStation, onSelectSta
         map,
       });
 
-      // 인포윈도우 오버레이
       const typeName = CHARGER_TYPES.find(t => t.id === station.chargerType)?.label || station.chargerType;
       const statusLabel = {
         available: '사용가능',
@@ -108,7 +95,6 @@ export default function KakaoMap({ center, filters, selectedStation, onSelectSta
         unknown: '상태미확인',
         restricted: '이용자제한',
       }[station.status] || '알 수 없음';
-
       const operatorLabel = station.operator || '정보없음';
 
       const overlayContent = `
@@ -171,22 +157,67 @@ export default function KakaoMap({ center, filters, selectedStation, onSelectSta
       markersRef.current.push(marker);
       overlaysRef.current.push(overlay);
     });
-  }, [filterStations, onMapUpdate, onSelectStation, apiStations]);
+  }, [filterStations, onMapUpdate, onSelectStation]);
+
+  // 지도 바운드 기반 API 호출 + 마커 렌더링
+  const fetchAndRender = useCallback(async () => {
+    const map = mapInstanceRef.current;
+    const kakao = window.kakao;
+    if (!map || !kakao) return;
+
+    const mapCenter = map.getCenter();
+    const mapBounds = map.getBounds();
+    const sw = mapBounds.getSouthWest();
+    const ne = mapBounds.getNorthEast();
+
+    const bounds = {
+      sw: { lat: sw.getLat(), lng: sw.getLng() },
+      ne: { lat: ne.getLat(), lng: ne.getLng() },
+    };
+
+    const requestId = Date.now();
+    fetchControllerRef.current = requestId;
+
+    onLoadingChange(true);
+    onErrorChange(null);
+
+    try {
+      const result = await fetchChargersInMapBounds({
+        centerLat: mapCenter.getLat(),
+        centerLng: mapCenter.getLng(),
+        bounds,
+        numOfRows: 100,
+      });
+
+      if (fetchControllerRef.current !== requestId) return;
+
+      cachedStationsRef.current = result.stations;
+      renderMarkers(result.stations);
+    } catch (err) {
+      if (fetchControllerRef.current !== requestId) return;
+      console.error('충전소 API 조회 실패:', err);
+      onErrorChange('충전소 데이터를 불러오지 못했습니다.');
+      if (cachedStationsRef.current.length > 0) {
+        renderMarkers(cachedStationsRef.current);
+      }
+    } finally {
+      if (fetchControllerRef.current === requestId) {
+        onLoadingChange(false);
+      }
+    }
+  }, [renderMarkers, onLoadingChange, onErrorChange]);
 
   // 지도 초기화
   useEffect(() => {
     const kakao = window.kakao;
     if (!kakao || !kakao.maps) {
-      // 카카오맵 SDK 미로드 시 fallback UI (데모용)
       if (mapRef.current) {
         mapRef.current.innerHTML = `
           <div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#e8edf3;color:#555;font-family:sans-serif;">
             <div style="font-size:48px;margin-bottom:16px;">🗺️</div>
             <p style="font-size:18px;font-weight:600;margin-bottom:8px;">카카오맵 API 키가 필요합니다</p>
             <p style="font-size:13px;color:#888;text-align:center;line-height:1.6;">
-              index.html에서 <code>KAKAO_APP_KEY</code>를<br/>
-              실제 카카오 JavaScript 앱 키로 교체해주세요.<br/><br/>
-              <a href="https://developers.kakao.com" target="_blank" style="color:#3B82F6;">카카오 개발자 사이트에서 키 발급 →</a>
+              index.html에서 카카오 JavaScript 앱 키를 확인해주세요.
             </p>
           </div>`;
       }
@@ -206,23 +237,23 @@ export default function KakaoMap({ center, filters, selectedStation, onSelectSta
       map.addControl(new kakao.maps.ZoomControl(), kakao.maps.ControlPosition.RIGHT);
       map.addControl(new kakao.maps.MapTypeControl(), kakao.maps.ControlPosition.TOPRIGHT);
 
-      // 현재 위치로 이동
+      // 현재 위치로 이동 후 API 호출
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition((pos) => {
           const lat = pos.coords.latitude;
           const lng = pos.coords.longitude;
           map.setCenter(new kakao.maps.LatLng(lat, lng));
-          updateMarkers();
+          fetchAndRender();
         }, () => {
-          updateMarkers();
+          fetchAndRender();
         });
       } else {
-        updateMarkers();
+        fetchAndRender();
       }
 
-      // 지도 이동 완료 시 마커 갱신
+      // 지도 이동/줌 완료 시 → API fetch + 마커 갱신
       kakao.maps.event.addListener(map, 'idle', () => {
-        updateMarkers();
+        fetchAndRender();
       });
 
       // 빈 영역 클릭 시 오버레이 닫기
@@ -232,10 +263,12 @@ export default function KakaoMap({ center, filters, selectedStation, onSelectSta
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 필터 변경 또는 API 데이터 변경 시 마커 재렌더링
+  // 필터 변경 시 → 캐시된 데이터로 마커 재렌더링
   useEffect(() => {
-    updateMarkers();
-  }, [filters, updateMarkers, apiStations]);
+    if (cachedStationsRef.current.length > 0) {
+      renderMarkers(cachedStationsRef.current);
+    }
+  }, [filters, renderMarkers]);
 
   // 선택된 충전소로 이동
   useEffect(() => {
