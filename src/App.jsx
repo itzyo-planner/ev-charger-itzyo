@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 import Sidebar from './components/Sidebar'
-import KakaoMap from './components/KakaoMap'
+import LeafletMap from './components/LeafletMap'
 import StatusLegend from './components/StatusLegend'
 
 export default function App() {
@@ -50,7 +50,7 @@ export default function App() {
     <div className="relative h-[100dvh] w-screen overflow-hidden bg-gray-50">
       {/* ===== 지도 영역 (항상 전체 화면) ===== */}
       <div className="absolute inset-0 z-0">
-        <KakaoMap
+        <LeafletMap
           center={mapCenter}
           filters={filters}
           selectedStation={selectedStation}
