@@ -207,26 +207,15 @@ export default function KakaoMap({ center, filters, selectedStation, onSelectSta
     }
   }, [renderMarkers, onLoadingChange, onErrorChange]);
 
-  // 지도 초기화
-  useEffect(() => {
+  // 지도 초기화 실행
+  const initMap = useCallback(() => {
     const kakao = window.kakao;
-    if (!kakao || !kakao.maps) {
-      if (mapRef.current) {
-        mapRef.current.innerHTML = `
-          <div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#e8edf3;color:#555;font-family:sans-serif;">
-            <div style="font-size:48px;margin-bottom:16px;">🗺️</div>
-            <p style="font-size:18px;font-weight:600;margin-bottom:8px;">카카오맵 API 키가 필요합니다</p>
-            <p style="font-size:13px;color:#888;text-align:center;line-height:1.6;">
-              index.html에서 카카오 JavaScript 앱 키를 확인해주세요.
-            </p>
-          </div>`;
-      }
-      return;
-    }
+    if (!kakao || !kakao.maps || !kakao.maps.load) return;
 
     kakao.maps.load(() => {
-      const container = mapRef.current;
-      const map = new kakao.maps.Map(container, {
+      if (!mapRef.current || mapInstanceRef.current) return;
+
+      const map = new kakao.maps.Map(mapRef.current, {
         center: new kakao.maps.LatLng(center.lat, center.lng),
         level: 8,
       });
@@ -261,7 +250,42 @@ export default function KakaoMap({ center, filters, selectedStation, onSelectSta
         overlaysRef.current.forEach((o) => o.setMap(null));
       });
     });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [center, fetchAndRender]);
+
+  // SDK 로드 대기 후 지도 초기화
+  useEffect(() => {
+    // 이미 SDK가 로드되어 있으면 바로 초기화
+    if (window.kakao && window.kakao.maps) {
+      initMap();
+      return;
+    }
+
+    // SDK가 아직 로드 안 됐으면 폴링으로 대기
+    let attempts = 0;
+    const maxAttempts = 50; // 최대 5초 대기
+    const timer = setInterval(() => {
+      attempts++;
+      if (window.kakao && window.kakao.maps) {
+        clearInterval(timer);
+        initMap();
+      } else if (attempts >= maxAttempts) {
+        clearInterval(timer);
+        if (mapRef.current) {
+          mapRef.current.innerHTML = `
+            <div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#e8edf3;color:#555;font-family:sans-serif;">
+              <div style="font-size:48px;margin-bottom:16px;">🗺️</div>
+              <p style="font-size:18px;font-weight:600;margin-bottom:8px;">카카오맵 SDK 로드 실패</p>
+              <p style="font-size:13px;color:#888;text-align:center;line-height:1.6;">
+                카카오맵 JavaScript SDK를 불러올 수 없습니다.<br/>
+                네트워크 연결을 확인하거나 페이지를 새로고침해주세요.
+              </p>
+            </div>`;
+        }
+      }
+    }, 100);
+
+    return () => clearInterval(timer);
+  }, [initMap]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 필터 변경 시 → 캐시된 데이터로 마커 재렌더링
   useEffect(() => {
