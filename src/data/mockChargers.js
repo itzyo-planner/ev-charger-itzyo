@@ -139,10 +139,20 @@ function generateMockChargers() {
 
 export const mockChargers = generateMockChargers();
 
-// 지도 중심 좌표 기준으로 반경 내 충전소 필터링 (시뮬레이션)
+// 지도 중심 좌표 기준으로 반경 내 충전소 필터링 (mock 데이터용 fallback)
 export function fetchChargersInBounds(centerLat, centerLng, level) {
   const radius = level * 0.05;
   return mockChargers.filter((c) => {
+    const dlat = Math.abs(c.lat - centerLat);
+    const dlng = Math.abs(c.lng - centerLng);
+    return dlat < radius && dlng < radius;
+  });
+}
+
+// 위도/경도 기준 바운드 내 필터링 (API 데이터용)
+export function filterStationsInBounds(stations, centerLat, centerLng, level) {
+  const radius = level * 0.05;
+  return stations.filter((c) => {
     const dlat = Math.abs(c.lat - centerLat);
     const dlng = Math.abs(c.lng - centerLng);
     return dlat < radius && dlng < radius;

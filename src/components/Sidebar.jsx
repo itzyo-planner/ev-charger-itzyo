@@ -7,7 +7,7 @@ import {
   DISTRICTS,
 } from '../data/mockChargers'
 
-export default function Sidebar({ filters, onFiltersChange, stations, selectedStation, onSelectStation }) {
+export default function Sidebar({ filters, onFiltersChange, stations, selectedStation, onSelectStation, loading, error, onSearch }) {
   const [activeTab, setActiveTab] = useState('search');
 
   const updateFilter = (key, value) => {
@@ -173,10 +173,14 @@ export default function Sidebar({ filters, onFiltersChange, stations, selectedSt
           {/* 버튼 */}
           <div className="flex gap-2">
             <button
-              onClick={() => onFiltersChange({ ...filters })}
-              className="flex-1 bg-blue-600 text-white py-2.5 rounded-full text-sm font-semibold hover:bg-blue-700 transition-colors"
+              onClick={() => {
+                onFiltersChange({ ...filters });
+                if (onSearch) onSearch();
+              }}
+              disabled={loading}
+              className="flex-1 bg-blue-600 text-white py-2.5 rounded-full text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              검색하기
+              {loading ? '조회 중...' : '검색하기'}
             </button>
             <button
               onClick={resetFilters}
@@ -206,7 +210,17 @@ export default function Sidebar({ filters, onFiltersChange, stations, selectedSt
 
           {/* 검색 결과 */}
           <div className="border-t border-gray-200 pt-4">
-            {stations.length > 0 ? (
+            {error && (
+              <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-xs text-red-600">{error}</p>
+              </div>
+            )}
+            {loading ? (
+              <div className="flex items-center justify-center py-8 gap-2">
+                <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                <span className="text-sm text-gray-500">공공데이터 API 조회 중...</span>
+              </div>
+            ) : stations.length > 0 ? (
               <div className="space-y-2">
                 <p className="text-sm text-gray-500 mb-2">검색 결과: {stations.length}개</p>
                 {stations.map((s) => (
@@ -237,7 +251,7 @@ export default function Sidebar({ filters, onFiltersChange, stations, selectedSt
               </div>
             ) : (
               <p className="text-sm text-gray-400 text-center py-6">
-                검색 결과가 없습니다.<br />[검색하기]를 클릭하세요.
+                검색 결과가 없습니다.<br />지역을 선택하고 [검색하기]를 클릭하세요.
               </p>
             )}
           </div>

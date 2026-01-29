@@ -1,5 +1,6 @@
-import { useEffect, useRef, useCallback } from 'react'
-import { fetchChargersInBounds, CHARGER_TYPES } from '../data/mockChargers'
+import { useEffect, useRef, useCallback, useState } from 'react'
+import { CHARGER_TYPES, fetchChargersInBounds, filterStationsInBounds } from '../data/mockChargers'
+import { fetchChargers } from '../data/api'
 
 // 상태별 마커 색상
 const STATUS_COLORS = {
@@ -26,7 +27,7 @@ function createMarkerSvg(color, count) {
   return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
 }
 
-export default function KakaoMap({ center, filters, selectedStation, onSelectStation, onMapUpdate }) {
+export default function KakaoMap({ center, filters, selectedStation, onSelectStation, onMapUpdate, apiStations }) {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markersRef = useRef([]);
@@ -39,7 +40,11 @@ export default function KakaoMap({ center, filters, selectedStation, onSelectSta
         if (!filters.chargerType.includes(s.chargerType)) return false;
       }
       if (filters.operator.length > 0 && !filters.operator.includes('all')) {
-        if (!filters.operator.includes(s.operator)) return false;
+        // API 데이터에서는 operator가 문자열(운영기관명)이므로 ID 또는 이름으로 필터
+        const opFilter = filters.operator;
+        const matchById = opFilter.includes(s.operatorId);
+        const matchByField = opFilter.includes(s.operator);
+        if (!matchById && !matchByField) return false;
       }
       if (filters.category !== 'all' && s.category !== filters.category) return false;
       if (filters.keyword) {
@@ -61,11 +66,19 @@ export default function KakaoMap({ center, filters, selectedStation, onSelectSta
     markersRef.current = [];
     overlaysRef.current = [];
 
-    const center = map.getCenter();
+    const mapCenter = map.getCenter();
     const level = map.getLevel();
-    const allStations = fetchChargersInBounds(center.getLat(), center.getLng(), level);
-    const filtered = filterStations(allStations);
 
+    let allStations;
+    if (apiStations && apiStations.length > 0) {
+      // API 데이터가 있으면 바운드 필터링 후 사용
+      allStations = filterStationsInBounds(apiStations, mapCenter.getLat(), mapCenter.getLng(), level);
+    } else {
+      // API 데이터 없으면 mock 데이터 fallback
+      allStations = fetchChargersInBounds(mapCenter.getLat(), mapCenter.getLng(), level);
+    }
+
+    const filtered = filterStations(allStations);
     onMapUpdate(filtered);
 
     const kakao = window.kakao;
@@ -96,19 +109,22 @@ export default function KakaoMap({ center, filters, selectedStation, onSelectSta
         restricted: '이용자제한',
       }[station.status] || '알 수 없음';
 
+      const operatorLabel = station.operator || '정보없음';
+
       const overlayContent = `
         <div style="
           background: white;
           border-radius: 12px;
           box-shadow: 0 4px 20px rgba(0,0,0,0.15);
           padding: 14px 16px;
-          min-width: 220px;
+          min-width: 240px;
+          max-width: 300px;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
           position: relative;
           transform: translateY(-10px);
         ">
           <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:6px;">
-            <strong style="font-size:14px; color:#1a1a2e;">${station.name}</strong>
+            <strong style="font-size:14px; color:#1a1a2e; flex:1; margin-right:8px;">${station.name}</strong>
             <span style="
               font-size:11px;
               padding: 2px 8px;
@@ -116,13 +132,15 @@ export default function KakaoMap({ center, filters, selectedStation, onSelectSta
               background: ${color}20;
               color: ${color};
               font-weight: 600;
+              white-space: nowrap;
             ">${statusLabel}</span>
           </div>
           <p style="font-size:12px; color:#888; margin:0 0 6px 0;">${station.address}</p>
-          <div style="display:flex; gap:6px;">
+          <div style="display:flex; gap:6px; flex-wrap:wrap;">
             <span style="font-size:11px; background:#f1f5f9; padding:2px 8px; border-radius:4px; color:#475569;">${typeName}</span>
-            <span style="font-size:11px; background:#f1f5f9; padding:2px 8px; border-radius:4px; color:#475569;">${station.power}kW</span>
+            ${station.power ? `<span style="font-size:11px; background:#f1f5f9; padding:2px 8px; border-radius:4px; color:#475569;">${station.power}kW</span>` : ''}
             <span style="font-size:11px; background:#f1f5f9; padding:2px 8px; border-radius:4px; color:#475569;">${station.chargerCount}기</span>
+            <span style="font-size:11px; background:#dbeafe; padding:2px 8px; border-radius:4px; color:#1d4ed8;">${operatorLabel}</span>
           </div>
           <div style="
             position: absolute;
@@ -153,7 +171,7 @@ export default function KakaoMap({ center, filters, selectedStation, onSelectSta
       markersRef.current.push(marker);
       overlaysRef.current.push(overlay);
     });
-  }, [filterStations, onMapUpdate, onSelectStation]);
+  }, [filterStations, onMapUpdate, onSelectStation, apiStations]);
 
   // 지도 초기화
   useEffect(() => {
@@ -214,10 +232,10 @@ export default function KakaoMap({ center, filters, selectedStation, onSelectSta
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 필터 변경 시 마커 재렌더링
+  // 필터 변경 또는 API 데이터 변경 시 마커 재렌더링
   useEffect(() => {
     updateMarkers();
-  }, [filters, updateMarkers]);
+  }, [filters, updateMarkers, apiStations]);
 
   // 선택된 충전소로 이동
   useEffect(() => {

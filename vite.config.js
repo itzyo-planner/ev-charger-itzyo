@@ -6,4 +6,14 @@ export default defineConfig({
   build: {
     outDir: 'dist',
   },
+  server: {
+    proxy: {
+      '/api/EvCharger': {
+        target: 'https://apis.data.go.kr/B552584',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/EvCharger/, '/EvCharger'),
+        secure: true,
+      },
+    },
+  },
 })
