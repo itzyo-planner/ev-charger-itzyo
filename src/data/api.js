@@ -45,6 +45,41 @@ const REGION_CODE_MAP = {
   gangwon: '51',
 };
 
+// 위도/경도 → 지역코드 추정 (지도 바운드 중심 좌표 기반)
+const REGION_BOUNDS = [
+  { code: '11', lat: 37.5665, lng: 126.978, name: '서울' },
+  { code: '26', lat: 35.1796, lng: 129.0756, name: '부산' },
+  { code: '27', lat: 35.8714, lng: 128.6014, name: '대구' },
+  { code: '28', lat: 37.4563, lng: 126.7052, name: '인천' },
+  { code: '29', lat: 35.1595, lng: 126.8526, name: '광주' },
+  { code: '30', lat: 36.3504, lng: 127.3845, name: '대전' },
+  { code: '31', lat: 35.5384, lng: 129.3114, name: '울산' },
+  { code: '36', lat: 36.4800, lng: 127.0000, name: '세종' },
+  { code: '41', lat: 37.4138, lng: 127.5183, name: '경기' },
+  { code: '43', lat: 36.6357, lng: 127.4917, name: '충북' },
+  { code: '44', lat: 36.5184, lng: 126.8000, name: '충남' },
+  { code: '45', lat: 35.7175, lng: 127.1530, name: '전북' },
+  { code: '46', lat: 34.8679, lng: 126.9910, name: '전남' },
+  { code: '47', lat: 36.4919, lng: 128.8889, name: '경북' },
+  { code: '48', lat: 35.4606, lng: 128.2132, name: '경남' },
+  { code: '50', lat: 33.4996, lng: 126.5312, name: '제주' },
+  { code: '51', lat: 37.8228, lng: 128.1555, name: '강원' },
+];
+
+// 지도 중심 좌표로 가장 가까운 지역코드 추정
+export function estimateRegionCode(lat, lng) {
+  let closest = null;
+  let minDist = Infinity;
+  for (const region of REGION_BOUNDS) {
+    const dist = Math.sqrt(Math.pow(lat - region.lat, 2) + Math.pow(lng - region.lng, 2));
+    if (dist < minDist) {
+      minDist = dist;
+      closest = region;
+    }
+  }
+  return closest ? closest.code : '11';
+}
+
 // XML 텍스트에서 특정 태그 값 추출
 function getTagValue(xml, tag) {
   const re = new RegExp(`<${tag}>([^<]*)</${tag}>`);
@@ -103,12 +138,10 @@ function groupByStation(items) {
     if (stationMap.has(key)) {
       const station = stationMap.get(key);
       station.chargerCount += 1;
-      // 가장 높은 출력 기록
       if (item.power > station.power) {
         station.power = item.power;
         station.chargerType = item.chargerType;
       }
-      // 하나라도 사용가능하면 사용가능 표시
       if (item.status === 'available') {
         station.status = 'available';
       } else if (item.status === 'in_use' && station.status !== 'available') {
@@ -126,81 +159,72 @@ function groupByStation(items) {
   return Array.from(stationMap.values());
 }
 
-// 공공데이터 API 호출
-export async function fetchChargers({ region, numOfRows = 100, pageNo = 1 } = {}) {
+// Bounds 내 충전소만 필터
+export function filterByBounds(stations, bounds) {
+  if (!bounds) return stations;
+  const { sw, ne } = bounds;
+  return stations.filter((s) =>
+    s.lat >= sw.lat && s.lat <= ne.lat &&
+    s.lng >= sw.lng && s.lng <= ne.lng
+  );
+}
+
+// 공공데이터 API 호출 (zscode 기반)
+export async function fetchChargers({ zscode, region, numOfRows = 100, pageNo = 1 } = {}) {
   const params = new URLSearchParams({
     serviceKey: SERVICE_KEY,
     pageNo: String(pageNo),
     numOfRows: String(numOfRows),
   });
 
-  // 지역 필터
-  if (region && REGION_CODE_MAP[region]) {
+  // zscode 직접 전달 또는 region 키로 변환
+  if (zscode) {
+    params.set('zscode', zscode);
+  } else if (region && REGION_CODE_MAP[region]) {
     params.set('zscode', REGION_CODE_MAP[region]);
   }
 
   const url = `${BASE_URL}/getChargerInfo?${params.toString()}`;
 
-  try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`API 호출 실패: ${response.status}`);
-    }
-
-    const xml = await response.text();
-
-    // 에러 응답 체크
-    const resultCode = getTagValue(xml, 'resultCode');
-    if (resultCode && resultCode !== '00') {
-      const resultMsg = getTagValue(xml, 'resultMsg');
-      throw new Error(`API 에러: ${resultCode} - ${resultMsg}`);
-    }
-
-    // totalCount 추출
-    const totalCount = parseInt(getTagValue(xml, 'totalCount')) || 0;
-
-    // item 태그 파싱
-    const itemRegex = /<item>([\s\S]*?)<\/item>/g;
-    const items = [];
-    let match;
-    while ((match = itemRegex.exec(xml)) !== null) {
-      const parsed = parseItem(match[1]);
-      if (parsed) items.push(parsed);
-    }
-
-    // 충전소 단위로 그룹핑
-    const stations = groupByStation(items);
-
-    return {
-      totalCount,
-      stations,
-      pageNo,
-      numOfRows,
-    };
-  } catch (error) {
-    console.error('충전소 데이터 조회 실패:', error);
-    throw error;
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`API 호출 실패: ${response.status}`);
   }
+
+  const xml = await response.text();
+
+  const resultCode = getTagValue(xml, 'resultCode');
+  if (resultCode && resultCode !== '00') {
+    const resultMsg = getTagValue(xml, 'resultMsg');
+    throw new Error(`API 에러: ${resultCode} - ${resultMsg}`);
+  }
+
+  const totalCount = parseInt(getTagValue(xml, 'totalCount')) || 0;
+
+  const itemRegex = /<item>([\s\S]*?)<\/item>/g;
+  const items = [];
+  let match;
+  while ((match = itemRegex.exec(xml)) !== null) {
+    const parsed = parseItem(match[1]);
+    if (parsed) items.push(parsed);
+  }
+
+  const stations = groupByStation(items);
+
+  return { totalCount, stations, pageNo, numOfRows };
 }
 
-// 다중 페이지 조회 (최대 maxPages 페이지까지)
-export async function fetchAllChargers({ region, numOfRows = 100, maxPages = 3 } = {}) {
-  const firstPage = await fetchChargers({ region, numOfRows, pageNo: 1 });
-  let allStations = [...firstPage.stations];
+// 지도 바운드 기반 충전소 조회 (중심 좌표로 지역 추정 → API 호출 → 바운드 필터)
+export async function fetchChargersInMapBounds({ centerLat, centerLng, bounds, numOfRows = 100 } = {}) {
+  const zscode = estimateRegionCode(centerLat, centerLng);
 
-  const totalPages = Math.ceil(firstPage.totalCount / numOfRows);
-  const pagesToFetch = Math.min(totalPages, maxPages);
+  // 2페이지까지 병렬 조회
+  const [page1, page2] = await Promise.all([
+    fetchChargers({ zscode, numOfRows, pageNo: 1 }),
+    fetchChargers({ zscode, numOfRows, pageNo: 2 }).catch(() => ({ stations: [] })),
+  ]);
 
-  if (pagesToFetch > 1) {
-    const promises = [];
-    for (let page = 2; page <= pagesToFetch; page++) {
-      promises.push(fetchChargers({ region, numOfRows, pageNo: page }));
-    }
-    const results = await Promise.all(promises);
-    results.forEach((r) => {
-      allStations = allStations.concat(r.stations);
-    });
-  }
+  let allStations = [...page1.stations, ...page2.stations];
 
   // 중복 제거 (같은 statId)
   const uniqueMap = new Map();
@@ -209,8 +233,18 @@ export async function fetchAllChargers({ region, numOfRows = 100, maxPages = 3 }
       uniqueMap.set(s.statId, s);
     }
   });
+  allStations = Array.from(uniqueMap.values());
 
-  return Array.from(uniqueMap.values());
+  // 바운드 필터
+  if (bounds) {
+    allStations = filterByBounds(allStations, bounds);
+  }
+
+  return {
+    totalCount: page1.totalCount,
+    stations: allStations,
+    zscode,
+  };
 }
 
 export { REGION_CODE_MAP };

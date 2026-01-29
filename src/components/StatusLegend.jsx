@@ -1,7 +1,7 @@
 export default function StatusLegend() {
   const statusItems = [
     { color: '#3B82F6', label: '사용가능' },
-    { color: '#22C55E', label: '사용중' },
+    { color: '#EF4444', label: '사용중' },
     { color: '#6B7280', label: '사용불가' },
     { color: '#F97316', label: '상태미확인' },
     { color: '#A855F7', label: '이용자제한' },

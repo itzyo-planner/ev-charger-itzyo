@@ -1,22 +1,15 @@
 import { useEffect, useRef, useCallback } from 'react'
-import { CHARGER_TYPES, fetchChargersInBounds, filterStationsInBounds } from '../data/mockChargers'
+import { CHARGER_TYPES } from '../data/mockChargers'
+import { fetchChargersInMapBounds } from '../data/api'
 
-// 상태별 마커 색상
+// 상태별 마커 색상 — 사용가능: 파란색, 사용중: 빨간색
 const STATUS_COLORS = {
-  available: '#3B82F6',
-  in_use: '#22C55E',
-  unavailable: '#6B7280',
-  unknown: '#F97316',
-  restricted: '#A855F7',
+  available: '#3B82F6',   // 파란색
+  in_use: '#EF4444',      // 빨간색
+  unavailable: '#6B7280', // 회색
+  unknown: '#F97316',     // 주황색
+  restricted: '#A855F7',  // 보라색
 };
-
-// 네이버맵 줌 레벨을 카카오맵 호환 레벨로 변환 (바운드 필터링용)
-function naverZoomToLevel(zoom) {
-  // 네이버맵 zoom: 높을수록 확대 (6~21)
-  // 카카오맵 level: 높을수록 축소 (1~14)
-  // 대략적 변환: level ≈ 21 - zoom
-  return Math.max(1, Math.min(14, 21 - zoom));
-}
 
 // SVG 마커 이미지 생성
 function createMarkerSvg(color, count) {
@@ -33,11 +26,14 @@ function createMarkerSvg(color, count) {
     </svg>`;
 }
 
-export default function NaverMap({ center, filters, selectedStation, onSelectStation, onMapUpdate, apiStations }) {
+export default function NaverMap({ center, filters, selectedStation, onSelectStation, onMapUpdate, onLoadingChange, onErrorChange }) {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markersRef = useRef([]);
   const infoWindowRef = useRef(null);
+  const fetchControllerRef = useRef(null);  // AbortController 대용 (중복 요청 방지)
+  const lastZscodeRef = useRef(null);       // 마지막으로 조회한 지역코드
+  const cachedStationsRef = useRef([]);     // 캐시된 충전소 데이터
 
   // 마커 필터링 함수
   const filterStations = useCallback((stations) => {
@@ -60,8 +56,8 @@ export default function NaverMap({ center, filters, selectedStation, onSelectSta
     });
   }, [filters]);
 
-  // 마커 업데이트
-  const updateMarkers = useCallback(() => {
+  // 현재 바운드 내 스테이션을 마커로 렌더링
+  const renderMarkers = useCallback((stations) => {
     const map = mapInstanceRef.current;
     const naver = window.naver;
     if (!map || !naver) return;
@@ -69,24 +65,11 @@ export default function NaverMap({ center, filters, selectedStation, onSelectSta
     // 기존 마커 제거
     markersRef.current.forEach((m) => m.setMap(null));
     markersRef.current = [];
-
-    // 기존 인포윈도우 닫기
     if (infoWindowRef.current) {
       infoWindowRef.current.close();
     }
 
-    const mapCenter = map.getCenter();
-    const zoom = map.getZoom();
-    const level = naverZoomToLevel(zoom);
-
-    let allStations;
-    if (apiStations && apiStations.length > 0) {
-      allStations = filterStationsInBounds(apiStations, mapCenter.lat(), mapCenter.lng(), level);
-    } else {
-      allStations = fetchChargersInBounds(mapCenter.lat(), mapCenter.lng(), level);
-    }
-
-    const filtered = filterStations(allStations);
+    const filtered = filterStations(stations);
     onMapUpdate(filtered);
 
     filtered.forEach((station) => {
@@ -165,7 +148,59 @@ export default function NaverMap({ center, filters, selectedStation, onSelectSta
 
       markersRef.current.push(marker);
     });
-  }, [filterStations, onMapUpdate, onSelectStation, apiStations]);
+  }, [filterStations, onMapUpdate, onSelectStation]);
+
+  // 지도 바운드 기반 API 호출 + 마커 렌더링
+  const fetchAndRender = useCallback(async () => {
+    const map = mapInstanceRef.current;
+    const naver = window.naver;
+    if (!map || !naver) return;
+
+    const mapCenter = map.getCenter();
+    const mapBounds = map.getBounds();
+    const sw = mapBounds.getSW();
+    const ne = mapBounds.getNE();
+
+    const bounds = {
+      sw: { lat: sw.lat(), lng: sw.lng() },
+      ne: { lat: ne.lat(), lng: ne.lng() },
+    };
+
+    // 요청 ID로 중복/stale 응답 방지
+    const requestId = Date.now();
+    fetchControllerRef.current = requestId;
+
+    onLoadingChange(true);
+    onErrorChange(null);
+
+    try {
+      const result = await fetchChargersInMapBounds({
+        centerLat: mapCenter.lat(),
+        centerLng: mapCenter.lng(),
+        bounds,
+        numOfRows: 100,
+      });
+
+      // stale 응답 무시
+      if (fetchControllerRef.current !== requestId) return;
+
+      lastZscodeRef.current = result.zscode;
+      cachedStationsRef.current = result.stations;
+      renderMarkers(result.stations);
+    } catch (err) {
+      if (fetchControllerRef.current !== requestId) return;
+      console.error('충전소 API 조회 실패:', err);
+      onErrorChange('충전소 데이터를 불러오지 못했습니다.');
+      // 캐시가 있으면 캐시로 렌더링
+      if (cachedStationsRef.current.length > 0) {
+        renderMarkers(cachedStationsRef.current);
+      }
+    } finally {
+      if (fetchControllerRef.current === requestId) {
+        onLoadingChange(false);
+      }
+    }
+  }, [renderMarkers, onLoadingChange, onErrorChange]);
 
   // 지도 초기화
   useEffect(() => {
@@ -195,23 +230,24 @@ export default function NaverMap({ center, filters, selectedStation, onSelectSta
 
     mapInstanceRef.current = map;
 
-    // 현재 위치로 이동
+    // 현재 위치로 이동 후 API 호출
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition((pos) => {
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
         map.setCenter(new naver.maps.LatLng(lat, lng));
-        updateMarkers();
+        fetchAndRender();
       }, () => {
-        updateMarkers();
+        // 위치 권한 거부 시 기본 센터로 API 호출
+        fetchAndRender();
       });
     } else {
-      updateMarkers();
+      fetchAndRender();
     }
 
-    // 지도 이동/줌 완료 시 마커 갱신
+    // 지도 이동/줌 완료 시 → API fetch + 마커 갱신
     naver.maps.Event.addListener(map, 'idle', () => {
-      updateMarkers();
+      fetchAndRender();
     });
 
     // 빈 영역 클릭 시 인포윈도우 닫기
@@ -223,16 +259,17 @@ export default function NaverMap({ center, filters, selectedStation, onSelectSta
     });
 
     return () => {
-      // cleanup
       markersRef.current.forEach((m) => m.setMap(null));
       markersRef.current = [];
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 필터 변경 또는 API 데이터 변경 시 마커 재렌더링
+  // 필터 변경 시 → 캐시된 데이터로 마커 재렌더링 (API 재호출 불필요)
   useEffect(() => {
-    updateMarkers();
-  }, [filters, updateMarkers, apiStations]);
+    if (cachedStationsRef.current.length > 0) {
+      renderMarkers(cachedStationsRef.current);
+    }
+  }, [filters, renderMarkers]);
 
   // 선택된 충전소로 이동
   useEffect(() => {

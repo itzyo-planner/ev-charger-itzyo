@@ -1,8 +1,7 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback } from 'react'
 import Sidebar from './components/Sidebar'
 import NaverMap from './components/NaverMap'
 import StatusLegend from './components/StatusLegend'
-import { fetchChargers } from './data/api'
 
 export default function App() {
   const [filters, setFilters] = useState({
@@ -16,49 +15,27 @@ export default function App() {
     isSmart: false,
   });
 
-  const [mapCenter, setMapCenter] = useState({ lat: 37.5665, lng: 126.978 });
+  const [mapCenter] = useState({ lat: 37.5665, lng: 126.978 });
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [selectedStation, setSelectedStation] = useState(null);
   const [visibleStations, setVisibleStations] = useState([]);
-  const [apiStations, setApiStations] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // 공공데이터 API에서 충전소 데이터 조회
-  const loadChargers = useCallback(async (region) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await fetchChargers({
-        region: region || undefined,
-        numOfRows: 100,
-        pageNo: 1,
-      });
-      setApiStations(result.stations);
-    } catch (err) {
-      console.error('API 호출 실패:', err);
-      setError('충전소 데이터를 불러오는 데 실패했습니다. 잠시 후 다시 시도해주세요.');
-      // API 실패 시 mock 데이터로 자동 fallback (apiStations를 빈 배열로 유지)
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // 앱 초기 로드 시 서울 지역 데이터 조회
-  useEffect(() => {
-    loadChargers('seoul');
-  }, [loadChargers]);
-
   const handleFiltersChange = useCallback((newFilters) => {
     setFilters(newFilters);
-    // 지역 변경 시 API 재조회
-    if (newFilters.region !== filters.region) {
-      loadChargers(newFilters.region);
-    }
-  }, [filters.region, loadChargers]);
+  }, []);
 
   const handleMapUpdate = useCallback((stations) => {
     setVisibleStations(stations);
+  }, []);
+
+  const handleLoadingChange = useCallback((isLoading) => {
+    setLoading(isLoading);
+  }, []);
+
+  const handleErrorChange = useCallback((err) => {
+    setError(err);
   }, []);
 
   return (
@@ -85,7 +62,6 @@ export default function App() {
           onSelectStation={setSelectedStation}
           loading={loading}
           error={error}
-          onSearch={() => loadChargers(filters.region)}
         />
       </div>
 
@@ -116,11 +92,11 @@ export default function App() {
           </div>
         )}
 
-        {/* API 데이터 카운트 표시 */}
-        {!loading && apiStations.length > 0 && (
+        {/* 바운드 내 충전소 카운트 */}
+        {!loading && !error && visibleStations.length > 0 && (
           <div className="absolute top-16 left-1/2 -translate-x-1/2 z-20 bg-white rounded-lg shadow px-3 py-1.5">
             <span className="text-xs text-gray-500">
-              공공데이터 API: <strong className="text-blue-600">{apiStations.length}</strong>개 충전소 로드됨
+              현재 지도 영역: <strong className="text-blue-600">{visibleStations.length}</strong>개 충전소
             </span>
           </div>
         )}
@@ -131,7 +107,8 @@ export default function App() {
           selectedStation={selectedStation}
           onSelectStation={setSelectedStation}
           onMapUpdate={handleMapUpdate}
-          apiStations={apiStations}
+          onLoadingChange={handleLoadingChange}
+          onErrorChange={handleErrorChange}
         />
 
         {/* 하단 범례 */}
