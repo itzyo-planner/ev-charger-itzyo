@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { CHARGER_TYPES } from '../data/mockChargers'
-import { fetchChargersInMapBounds } from '../data/api'
+import { fetchChargersInMapBounds, getRegionCenter } from '../data/api'
 
 // 내 위치 펄스 애니메이션 CSS 주입
 if (typeof document !== 'undefined' && !document.getElementById('my-loc-pulse')) {
@@ -42,7 +42,7 @@ function createMarkerIcon(color, count) {
   });
 }
 
-export default function LeafletMap({ center, filters, selectedStation, onSelectStation, onMapUpdate, onLoadingChange, onErrorChange }) {
+export default function LeafletMap({ center, filters, selectedStation, onSelectStation, onMapUpdate, onLoadingChange, onErrorChange, searchTrigger }) {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markersLayerRef = useRef(null);
@@ -201,16 +201,16 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
           const lng = pos.coords.longitude;
           map.setView([lat, lng], 13);
 
-          // 내 위치 빨간 점 마커
+          // 내 위치 빨간 점 마커 (크게)
           const myLocIcon = L.divIcon({
             html: `
-              <div style="position:relative;width:18px;height:18px;">
-                <div style="position:absolute;inset:0;background:rgba(239,68,68,0.25);border-radius:50%;animation:pulse-ring 1.5s ease-out infinite;"></div>
-                <div style="position:absolute;top:4px;left:4px;width:10px;height:10px;background:#EF4444;border:2px solid white;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,0.3);"></div>
+              <div style="position:relative;width:30px;height:30px;">
+                <div style="position:absolute;inset:0;background:rgba(239,68,68,0.2);border-radius:50%;animation:pulse-ring 1.5s ease-out infinite;"></div>
+                <div style="position:absolute;top:7px;left:7px;width:16px;height:16px;background:#EF4444;border:3px solid white;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.35);"></div>
               </div>`,
             className: '',
-            iconSize: [18, 18],
-            iconAnchor: [9, 9],
+            iconSize: [30, 30],
+            iconAnchor: [15, 15],
           });
           myLocationMarkerRef.current = L.marker([lat, lng], { icon: myLocIcon, zIndexOffset: 1000 })
             .addTo(map)
@@ -241,6 +241,21 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
       renderMarkers(cachedStationsRef.current);
     }
   }, [filters, renderMarkers]);
+
+  // 검색 트리거: 지역 선택 시 해당 지역으로 이동 → moveend에서 자동 fetch
+  useEffect(() => {
+    if (!searchTrigger) return;
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    const regionCenter = getRegionCenter(filters.region);
+    if (regionCenter) {
+      map.setView([regionCenter.lat, regionCenter.lng], 11);
+    } else {
+      // 지역 미선택 시 현재 위치에서 다시 fetch
+      fetchAndRender();
+    }
+  }, [searchTrigger]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 선택된 충전소로 이동
   useEffect(() => {

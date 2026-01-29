@@ -21,6 +21,7 @@ export default function App() {
   const [visibleStations, setVisibleStations] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [searchTrigger, setSearchTrigger] = useState(0);
 
   const handleFiltersChange = useCallback((newFilters) => {
     setFilters(newFilters);
@@ -36,6 +37,10 @@ export default function App() {
 
   const handleErrorChange = useCallback((err) => {
     setError(err);
+  }, []);
+
+  const handleSearch = useCallback(() => {
+    setSearchTrigger((prev) => prev + 1);
   }, []);
 
   const handleSelectStation = useCallback((station) => {
@@ -58,6 +63,7 @@ export default function App() {
           onMapUpdate={handleMapUpdate}
           onLoadingChange={handleLoadingChange}
           onErrorChange={handleErrorChange}
+          searchTrigger={searchTrigger}
         />
       </div>
 
@@ -171,6 +177,7 @@ export default function App() {
             onSelectStation={handleSelectStation}
             loading={loading}
             error={error}
+            onSearch={handleSearch}
           />
         </div>
       </div>

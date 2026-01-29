@@ -1,6 +1,10 @@
 // 한국환경공단 전기자동차 충전소 공공데이터 API
 const SERVICE_KEY = 'ada87e1014ef7984e17193005501805bb19b4effcc00fc8659eb3a62dcd6fc53';
-const BASE_URL = '/api/EvCharger';
+
+// 개발 환경에서는 Vite 프록시, 프로덕션에서는 직접 호출
+const BASE_URL = import.meta.env.DEV
+  ? '/api/EvCharger'
+  : 'https://apis.data.go.kr/B552584/EvCharger';
 
 // 충전기 타입 코드 매핑 (API → 앱)
 const CHARGER_TYPE_MAP = {
@@ -247,4 +251,12 @@ export async function fetchChargersInMapBounds({ centerLat, centerLng, bounds, n
   };
 }
 
-export { REGION_CODE_MAP };
+// 지역 키 → 중심 좌표 조회
+export function getRegionCenter(regionKey) {
+  const code = REGION_CODE_MAP[regionKey];
+  if (!code) return null;
+  const region = REGION_BOUNDS.find((r) => r.code === code);
+  return region ? { lat: region.lat, lng: region.lng } : null;
+}
+
+export { REGION_CODE_MAP, REGION_BOUNDS };
