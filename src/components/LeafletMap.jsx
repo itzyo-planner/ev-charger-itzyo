@@ -4,6 +4,18 @@ import 'leaflet/dist/leaflet.css'
 import { CHARGER_TYPES } from '../data/mockChargers'
 import { fetchChargersInMapBounds } from '../data/api'
 
+// 내 위치 펄스 애니메이션 CSS 주입
+if (typeof document !== 'undefined' && !document.getElementById('my-loc-pulse')) {
+  const style = document.createElement('style');
+  style.id = 'my-loc-pulse';
+  style.textContent = `
+    @keyframes pulse-ring {
+      0% { transform: scale(1); opacity: 1; }
+      100% { transform: scale(2.5); opacity: 0; }
+    }`;
+  document.head.appendChild(style);
+}
+
 // 상태별 마커 색상
 const STATUS_COLORS = {
   available: '#3B82F6',
@@ -34,6 +46,7 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markersLayerRef = useRef(null);
+  const myLocationMarkerRef = useRef(null);
   const fetchControllerRef = useRef(null);
   const cachedStationsRef = useRef([]);
 
@@ -180,14 +193,30 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
     markersLayerRef.current = L.layerGroup().addTo(map);
     mapInstanceRef.current = map;
 
-    // 현재 위치로 이동
+    // 현재 위치로 이동 + 빨간 점 표시
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          map.setView([pos.coords.latitude, pos.coords.longitude], 13);
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          map.setView([lat, lng], 13);
+
+          // 내 위치 빨간 점 마커
+          const myLocIcon = L.divIcon({
+            html: `
+              <div style="position:relative;width:18px;height:18px;">
+                <div style="position:absolute;inset:0;background:rgba(239,68,68,0.25);border-radius:50%;animation:pulse-ring 1.5s ease-out infinite;"></div>
+                <div style="position:absolute;top:4px;left:4px;width:10px;height:10px;background:#EF4444;border:2px solid white;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,0.3);"></div>
+              </div>`,
+            className: '',
+            iconSize: [18, 18],
+            iconAnchor: [9, 9],
+          });
+          myLocationMarkerRef.current = L.marker([lat, lng], { icon: myLocIcon, zIndexOffset: 1000 })
+            .addTo(map)
+            .bindPopup('내 위치');
         },
         () => {
-          // 위치 거부 시 기본 위치에서 fetch
           fetchAndRender();
         }
       );
