@@ -67,16 +67,10 @@ export default function App() {
         />
       </div>
 
-      {/* ===== 상단 탭 ===== */}
-      <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 bg-white rounded-full shadow-lg flex overflow-hidden">
-        <button className="px-4 py-2 md:px-5 md:py-2.5 text-xs md:text-sm font-semibold text-blue-600 bg-white border-b-2 border-blue-600 flex items-center gap-1">
-          <span className="text-base md:text-lg">⚡</span>
-          <span className="hidden sm:inline">전기차</span>충전소
-        </button>
-        <button className="px-4 py-2 md:px-5 md:py-2.5 text-xs md:text-sm text-gray-400 hover:text-gray-600 flex items-center gap-1">
-          <span className="text-base md:text-lg">💧</span>
-          <span className="hidden sm:inline">수소</span>충전소
-        </button>
+      {/* ===== 상단 타이틀 ===== */}
+      <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 bg-white rounded-full shadow-lg px-5 py-2 md:px-6 md:py-2.5 flex items-center gap-1.5">
+        <span className="text-base md:text-lg">⚡</span>
+        <span className="text-xs md:text-sm font-semibold text-blue-600">전기차 충전소</span>
       </div>
 
       {/* ===== 로딩 인디케이터 ===== */}
