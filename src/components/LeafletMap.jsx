@@ -3,6 +3,7 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { CHARGER_TYPES } from '../data/mockChargers'
 import { fetchChargersInMapBounds, getRegionCenter } from '../data/api'
+import { getPricing, formatPrice } from '../data/pricing'
 
 // 내 위치 펄스 애니메이션 CSS 주입
 if (typeof document !== 'undefined' && !document.getElementById('my-loc-pulse')) {
@@ -100,6 +101,14 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
       }[station.status] || '알 수 없음';
       const operatorLabel = station.operator || '정보없음';
 
+      const pricing = getPricing(station.operator);
+      const priceHtml = pricing
+        ? `<div style="display:flex;gap:8px;margin-top:6px;padding:4px 8px;background:#fefce8;border-radius:6px;font-size:11px;">
+            <span style="color:#a16207;">회원 <b>${formatPrice(pricing.member)}/kWh</b></span>
+            <span style="color:#d97706;">비회원 <b>${formatPrice(pricing.nonMember)}/kWh</b></span>
+          </div>`
+        : '';
+
       const popupContent = `
         <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-width:200px;max-width:280px;">
           <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:6px;">
@@ -113,6 +122,7 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
             <span style="font-size:11px;background:#f1f5f9;padding:2px 8px;border-radius:4px;color:#475569;">${station.chargerCount}기</span>
             <span style="font-size:11px;background:#dbeafe;padding:2px 8px;border-radius:4px;color:#1d4ed8;">${operatorLabel}</span>
           </div>
+          ${priceHtml}
         </div>
       `;
 

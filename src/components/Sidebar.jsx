@@ -6,6 +6,7 @@ import {
   REGIONS,
   DISTRICTS,
 } from '../data/mockChargers'
+import { getPricing, formatPrice } from '../data/pricing'
 
 export default function Sidebar({ filters, onFiltersChange, stations, selectedStation, onSelectStation, loading, error, onSearch }) {
   const [activeTab, setActiveTab] = useState('search');
@@ -138,18 +139,22 @@ export default function Sidebar({ filters, onFiltersChange, stations, selectedSt
             </div>
           </div>
 
-          {/* 충전기 타입 */}
+          {/* 충전타입 */}
           <div>
-            <label className="block text-sm font-semibold text-gray-800 mb-2">충전기 타입</label>
-            <select
-              value={filters.chargerType.includes('all') ? 'all' : filters.chargerType[0] || 'all'}
-              onChange={(e) => updateFilter('chargerType', [e.target.value])}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
+            <label className="block text-sm font-semibold text-gray-800 mb-2">충전타입</label>
+            <div className="grid grid-cols-2 gap-2">
               {CHARGER_TYPES.map((t) => (
-                <option key={t.id} value={t.id}>{t.label}</option>
+                <label key={t.id} className="touch-btn flex items-center gap-2 text-sm md:text-xs text-gray-700 cursor-pointer py-1">
+                  <input
+                    type="checkbox"
+                    checked={filters.chargerType.includes(t.id)}
+                    onChange={() => toggleArrayFilter('chargerType', t.id)}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  {t.label}
+                </label>
               ))}
-            </select>
+            </div>
           </div>
 
           {/* 검색어 */}
@@ -239,12 +244,16 @@ export default function Sidebar({ filters, onFiltersChange, stations, selectedSt
                       </div>
                       <StatusBadge status={s.status} />
                     </div>
-                    <div className="flex gap-2 mt-1.5">
+                    <div className="flex gap-2 mt-1.5 flex-wrap">
                       <span className="text-xs px-2 py-0.5 bg-gray-100 rounded text-gray-600">{s.power}kW</span>
                       <span className="text-xs px-2 py-0.5 bg-gray-100 rounded text-gray-600">
                         {CHARGER_TYPES.find(t => t.id === s.chargerType)?.label || s.chargerType}
                       </span>
+                      {s.operator && (
+                        <span className="text-xs px-2 py-0.5 bg-blue-50 rounded text-blue-600">{s.operator}</span>
+                      )}
                     </div>
+                    <PricingInfo operator={s.operator} />
                   </button>
                 ))}
               </div>
@@ -267,6 +276,17 @@ export default function Sidebar({ filters, onFiltersChange, stations, selectedSt
           엑셀 다운로드
         </button>
       </div>
+    </div>
+  );
+}
+
+function PricingInfo({ operator }) {
+  const pricing = getPricing(operator);
+  if (!pricing) return null;
+  return (
+    <div className="flex gap-3 mt-1.5 text-[11px]">
+      <span className="text-amber-700">회원 <b>{formatPrice(pricing.member)}/kWh</b></span>
+      <span className="text-orange-600">비회원 <b>{formatPrice(pricing.nonMember)}/kWh</b></span>
     </div>
   );
 }

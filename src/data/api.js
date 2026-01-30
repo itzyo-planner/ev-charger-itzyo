@@ -13,7 +13,9 @@ const CHARGER_TYPE_MAP = {
   '05': 'DC_COMBO',      // DC차데모+DC콤보
   '06': 'DC_COMBO',      // DC차데모+AC3상+DC콤보
   '07': 'AC3',
-  '08': 'DC_COMBO',      // DC콤보(완속포함)
+  '08': 'DC_COMBO_SLOW', // DC콤보(완속포함)
+  '09': 'NACS',          // NACS (테슬라)
+  '10': 'NACS',          // NACS+DC콤보
 };
 
 // 충전기 상태 코드 매핑 (API → 앱)
