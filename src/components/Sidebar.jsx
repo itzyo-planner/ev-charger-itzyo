@@ -75,17 +75,17 @@ export default function Sidebar({ filters, onFiltersChange, stations, selectedSt
       </div>
 
       {activeTab === 'search' ? (
-        <div className="flex-1 overflow-y-auto p-4 space-y-5">
+        <div className="flex-1 overflow-y-auto p-4 md:p-3 space-y-5 md:space-y-3">
           {/* 지역선택 */}
           <div>
-            <label className="block text-sm font-semibold text-gray-800 mb-2">지역선택</label>
+            <label className="block text-sm md:text-xs font-semibold text-gray-800 mb-2 md:mb-1">지역선택</label>
             <div className="flex gap-2">
               <select
                 value={filters.region}
                 onChange={(e) => {
                   onFiltersChange({ ...filters, region: e.target.value, district: '' });
                 }}
-                className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="flex-1 border border-gray-300 rounded-md px-3 py-2 md:py-1.5 text-sm md:text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 {REGIONS.map((r) => (
                   <option key={r.id} value={r.id}>{r.label}</option>
@@ -94,7 +94,7 @@ export default function Sidebar({ filters, onFiltersChange, stations, selectedSt
               <select
                 value={filters.district}
                 onChange={(e) => updateFilter('district', e.target.value)}
-                className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="flex-1 border border-gray-300 rounded-md px-3 py-2 md:py-1.5 text-sm md:text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 {districtOptions.map((d) => (
                   <option key={d.id} value={d.id}>{d.label}</option>
@@ -105,12 +105,12 @@ export default function Sidebar({ filters, onFiltersChange, stations, selectedSt
 
           {/* 충전소 분류 */}
           <div>
-            <label className="block text-sm font-semibold text-gray-800 mb-2">충전소 분류</label>
+            <label className="block text-sm md:text-xs font-semibold text-gray-800 mb-2 md:mb-1">충전소 분류</label>
             <div className="flex gap-2 items-center">
               <select
                 value={filters.category}
                 onChange={(e) => updateFilter('category', e.target.value)}
-                className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="flex-1 border border-gray-300 rounded-md px-3 py-2 md:py-1.5 text-sm md:text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 {STATION_CATEGORIES.map((c) => (
                   <option key={c.id} value={c.id}>{c.label}</option>
