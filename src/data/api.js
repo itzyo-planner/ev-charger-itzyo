@@ -257,8 +257,8 @@ export async function fetchChargers({ zscode, region, numOfRows = 100, pageNo = 
 }
 
 // 지도 바운드 기반 충전소 조회 (중심 좌표로 지역 추정 → API 호출 → 바운드 필터)
-export async function fetchChargersInMapBounds({ centerLat, centerLng, bounds, numOfRows = 100 } = {}) {
-  const zscode = estimateRegionCode(centerLat, centerLng);
+export async function fetchChargersInMapBounds({ centerLat, centerLng, bounds, numOfRows = 100, zscodeOverride } = {}) {
+  const zscode = zscodeOverride || estimateRegionCode(centerLat, centerLng);
 
   // 2페이지까지 병렬 조회
   const [page1, page2] = await Promise.all([

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { fetchChargersInMapBounds, getRegionCenter } from '../data/api'
+import { fetchChargersInMapBounds, getRegionCenter, REGION_CODE_MAP } from '../data/api'
 
 // 내 위치 펄스 애니메이션 CSS 주입
 if (typeof document !== 'undefined' && !document.getElementById('my-loc-pulse')) {
@@ -52,6 +52,8 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
   const cachedStationsRef = useRef([]);
   const debounceTimerRef = useRef(null);
   const fetchAndRenderRef = useRef(null);
+  const filtersRef = useRef(filters);
+  filtersRef.current = filters;
 
   // 필터링
   const filterStations = useCallback((stations) => {
@@ -108,6 +110,10 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
       ne: { lat: ne.lat, lng: ne.lng },
     };
 
+    // 사용자가 지역을 선택한 경우 해당 지역코드를 직접 사용
+    const selectedRegion = filtersRef.current.region;
+    const zscodeOverride = selectedRegion ? REGION_CODE_MAP[selectedRegion] : undefined;
+
     const requestId = Date.now();
     fetchControllerRef.current = requestId;
 
@@ -120,6 +126,7 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
         centerLng: mapCenter.lng,
         bounds,
         numOfRows: 100,
+        zscodeOverride,
       });
 
       if (fetchControllerRef.current !== requestId) return;
@@ -262,10 +269,18 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
     const map = mapInstanceRef.current;
     if (!map) return;
 
+    // 기존 디바운스 타이머 취소 (중복 fetch 방지)
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+
     const regionCenter = getRegionCenter(filters.region);
     if (regionCenter) {
+      // 지역 중심으로 이동 후 직접 fetch (moveend에 의존하지 않음)
+      map.once('moveend', () => {
+        if (fetchAndRenderRef.current) fetchAndRenderRef.current();
+      });
       map.setView([regionCenter.lat, regionCenter.lng], 11);
     } else {
+      // 지역 미선택 시 현재 위치에서 바로 fetch
       if (fetchAndRenderRef.current) fetchAndRenderRef.current();
     }
   }, [searchTrigger]); // eslint-disable-line react-hooks/exhaustive-deps
