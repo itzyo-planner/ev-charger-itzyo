@@ -197,18 +197,20 @@ export default function Sidebar({ filters, onFiltersChange, stations, selectedSt
           {/* 운영기관 체크박스 */}
           <div>
             <label className="block text-sm font-semibold text-gray-800 mb-2">운영기관</label>
-            <div className="grid grid-cols-2 gap-2">
-              {OPERATORS.map((op) => (
-                <label key={op.id} className="touch-btn flex items-center gap-2 text-sm md:text-xs text-gray-700 cursor-pointer py-1">
-                  <input
-                    type="checkbox"
-                    checked={filters.operator.includes(op.id)}
-                    onChange={() => toggleArrayFilter('operator', op.id)}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  {op.label}
-                </label>
-              ))}
+            <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-2">
+              <div className="grid grid-cols-2 gap-1">
+                {OPERATORS.map((op) => (
+                  <label key={op.id} className="touch-btn flex items-center gap-2 text-sm md:text-xs text-gray-700 cursor-pointer py-1 px-1">
+                    <input
+                      type="checkbox"
+                      checked={filters.operator.includes(op.id)}
+                      onChange={() => toggleArrayFilter('operator', op.id)}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 flex-shrink-0"
+                    />
+                    <span className="truncate">{op.label}</span>
+                  </label>
+                ))}
+              </div>
             </div>
           </div>
 
