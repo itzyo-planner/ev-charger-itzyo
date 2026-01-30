@@ -91,6 +91,30 @@ function getTagValue(xml, tag) {
   return match ? match[1].trim() : '';
 }
 
+// 충전기 타입 코드 → 한글 라벨
+const CHARGER_TYPE_LABEL = {
+  '01': 'DC차데모',
+  '02': 'AC완속',
+  '03': 'DC차데모+AC3상',
+  '04': 'DC콤보',
+  '05': 'DC차데모+DC콤보',
+  '06': 'DC차데모+AC3상+DC콤보',
+  '07': 'AC3상',
+  '08': 'DC콤보(완속)',
+  '09': 'NACS',
+  '10': 'NACS+DC콤보',
+};
+
+// 충전기 출력 구분 라벨
+function getPowerLabel(output) {
+  const w = parseInt(output) || 0;
+  if (w <= 7) return `완속 (${w}kW 단독)`;
+  if (w <= 50) return `급속 (${w}kW)`;
+  if (w <= 100) return `급속 (${w}kW)`;
+  if (w <= 200) return `초급속 (${w}kW)`;
+  return `초급속 (${w}kW)`;
+}
+
 // XML item을 스테이션 객체로 변환
 function parseItem(itemXml) {
   const statId = getTagValue(itemXml, 'statId');
@@ -107,6 +131,11 @@ function parseItem(itemXml) {
   const useTime = getTagValue(itemXml, 'useTime');
   const limitYn = getTagValue(itemXml, 'limitYn');
   const limitDetail = getTagValue(itemXml, 'limitDetail');
+  const busiCall = getTagValue(itemXml, 'busiCall');
+  const statUpdDt = getTagValue(itemXml, 'statUpdDt');
+  const note = getTagValue(itemXml, 'note');
+  const parkingFree = getTagValue(itemXml, 'parkingFree');
+  const kindDetail = getTagValue(itemXml, 'kindDetail');
 
   if (!lat || !lng || isNaN(lat) || isNaN(lng)) return null;
 
@@ -120,15 +149,22 @@ function parseItem(itemXml) {
     lng,
     chargerType: CHARGER_TYPE_MAP[chgerType] || 'DC_COMBO',
     chargerTypeCode: chgerType,
+    chargerTypeLabel: CHARGER_TYPE_LABEL[chgerType] || chgerType,
     status: STATUS_MAP[stat] || 'unknown',
     statusCode: stat,
     power: parseInt(output) || 0,
+    powerLabel: getPowerLabel(output),
     operator: busiNm,
     operatorId: busiId,
     useTime: useTime || '',
     limitYn: limitYn === 'Y',
     limitDetail: limitDetail || '',
     category: limitYn === 'Y' ? 'private' : 'public',
+    phone: busiCall || '',
+    statUpdDt: statUpdDt || '',
+    note: note || '',
+    parkingFree: parkingFree === 'Y',
+    kindDetail: kindDetail || '',
   };
 }
 
@@ -142,6 +178,7 @@ function groupByStation(items) {
     if (stationMap.has(key)) {
       const station = stationMap.get(key);
       station.chargerCount += 1;
+      station.chargers.push(item);
       if (item.power > station.power) {
         station.power = item.power;
         station.chargerType = item.chargerType;
@@ -156,6 +193,7 @@ function groupByStation(items) {
         ...item,
         id: key,
         chargerCount: 1,
+        chargers: [item],
       });
     }
   });

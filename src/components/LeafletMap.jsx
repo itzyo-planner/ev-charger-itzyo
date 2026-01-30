@@ -1,9 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { CHARGER_TYPES } from '../data/mockChargers'
 import { fetchChargersInMapBounds, getRegionCenter } from '../data/api'
-import { getPricing, formatPrice } from '../data/pricing'
 
 // 내 위치 펄스 애니메이션 CSS 주입
 if (typeof document !== 'undefined' && !document.getElementById('my-loc-pulse')) {
@@ -90,43 +88,6 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
       const color = STATUS_COLORS[station.status] || STATUS_COLORS.unknown;
       const icon = createMarkerIcon(color, station.chargerCount);
       const marker = L.marker([station.lat, station.lng], { icon });
-
-      const typeName = CHARGER_TYPES.find(t => t.id === station.chargerType)?.label || station.chargerType;
-      const statusLabel = {
-        available: '사용가능',
-        in_use: '사용중',
-        unavailable: '사용불가',
-        unknown: '상태미확인',
-        restricted: '이용자제한',
-      }[station.status] || '알 수 없음';
-      const operatorLabel = station.operator || '정보없음';
-
-      const pricing = getPricing(station.operator);
-      const priceHtml = pricing
-        ? `<div style="display:flex;gap:8px;margin-top:6px;padding:4px 8px;background:#fefce8;border-radius:6px;font-size:11px;">
-            <span style="color:#a16207;">회원 <b>${formatPrice(pricing.member)}/kWh</b></span>
-            <span style="color:#d97706;">비회원 <b>${formatPrice(pricing.nonMember)}/kWh</b></span>
-          </div>`
-        : '';
-
-      const popupContent = `
-        <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-width:200px;max-width:280px;">
-          <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:6px;">
-            <strong style="font-size:14px;color:#1a1a2e;flex:1;margin-right:8px;">${station.name}</strong>
-            <span style="font-size:11px;padding:2px 8px;border-radius:10px;background:${color}20;color:${color};font-weight:600;white-space:nowrap;">${statusLabel}</span>
-          </div>
-          <p style="font-size:12px;color:#888;margin:0 0 6px 0;">${station.address}</p>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            <span style="font-size:11px;background:#f1f5f9;padding:2px 8px;border-radius:4px;color:#475569;">${typeName}</span>
-            ${station.power ? `<span style="font-size:11px;background:#f1f5f9;padding:2px 8px;border-radius:4px;color:#475569;">${station.power}kW</span>` : ''}
-            <span style="font-size:11px;background:#f1f5f9;padding:2px 8px;border-radius:4px;color:#475569;">${station.chargerCount}기</span>
-            <span style="font-size:11px;background:#dbeafe;padding:2px 8px;border-radius:4px;color:#1d4ed8;">${operatorLabel}</span>
-          </div>
-          ${priceHtml}
-        </div>
-      `;
-
-      marker.bindPopup(popupContent, { maxWidth: 300, closeButton: true });
       marker.on('click', () => onSelectStation(station));
       markersLayerRef.current.addLayer(marker);
     });

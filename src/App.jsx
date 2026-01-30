@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react'
 import Sidebar from './components/Sidebar'
 import LeafletMap from './components/LeafletMap'
 import StatusLegend from './components/StatusLegend'
+import StationDetail from './components/StationDetail'
 
 export default function App() {
   const [filters, setFilters] = useState({
@@ -179,6 +180,14 @@ export default function App() {
 
       {/* ===== 하단 범례 ===== */}
       <StatusLegend />
+
+      {/* ===== 충전소 상세 팝업 ===== */}
+      {selectedStation && (
+        <StationDetail
+          station={selectedStation}
+          onClose={() => setSelectedStation(null)}
+        />
+      )}
     </div>
   )
 }
