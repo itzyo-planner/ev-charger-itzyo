@@ -26,20 +26,21 @@ const STATUS_COLORS = {
   restricted: '#A855F7',
 };
 
-// SVG 마커 아이콘 생성
+// 원형 마커 아이콘 생성 (스크린샷처럼 원형 + 숫자)
 function createMarkerIcon(color, count) {
+  const size = count > 99 ? 40 : 34;
+  const fontSize = count > 99 ? 11 : 13;
   const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="40" viewBox="0 0 32 40">
-      <path d="M16 37 C16 37 30 23 30 14 C30 6.3 23.7 0 16 0 C8.3 0 2 6.3 2 14 C2 23 16 37 16 37Z"
-        fill="${color}" stroke="white" stroke-width="2"/>
-      <text x="16" y="17" text-anchor="middle" fill="white" font-size="${count > 99 ? 8 : 10}" font-weight="bold" font-family="Arial">${count}</text>
+    <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+      <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 2}" fill="${color}" stroke="white" stroke-width="2.5" opacity="0.9"/>
+      <text x="${size/2}" y="${size/2 + fontSize * 0.35}" text-anchor="middle" fill="white" font-size="${fontSize}" font-weight="bold" font-family="Arial">${count}</text>
     </svg>`;
   return L.divIcon({
     html: svg,
     className: '',
-    iconSize: [32, 40],
-    iconAnchor: [16, 40],
-    popupAnchor: [0, -40],
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+    popupAnchor: [0, -size / 2],
   });
 }
 
@@ -48,6 +49,7 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
   const mapInstanceRef = useRef(null);
   const markersLayerRef = useRef(null);
   const myLocationMarkerRef = useRef(null);
+  const myLocationRef = useRef(null);
   const fetchControllerRef = useRef(null);
   const cachedStationsRef = useRef([]);
   const debounceTimerRef = useRef(null);
@@ -77,7 +79,6 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
     const map = mapInstanceRef.current;
     if (!map) return;
 
-    // 기존 마커 제거
     if (markersLayerRef.current) {
       markersLayerRef.current.clearLayers();
     }
@@ -88,7 +89,6 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
     filtered.forEach((station) => {
       const color = STATUS_COLORS[station.status] || STATUS_COLORS.unknown;
       const icon = createMarkerIcon(color, station.chargerCount);
-
       const marker = L.marker([station.lat, station.lng], { icon });
 
       const typeName = CHARGER_TYPES.find(t => t.id === station.chargerType)?.label || station.chargerType;
@@ -127,10 +127,7 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
       `;
 
       marker.bindPopup(popupContent, { maxWidth: 300, closeButton: true });
-      marker.on('click', () => {
-        onSelectStation(station);
-      });
-
+      marker.on('click', () => onSelectStation(station));
       markersLayerRef.current.addLayer(marker);
     });
   }, [filterStations, onMapUpdate, onSelectStation]);
@@ -182,10 +179,52 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
     }
   }, [renderMarkers, onLoadingChange, onErrorChange]);
 
-  // ref를 항상 최신 fetchAndRender로 유지
-  useEffect(() => {
-    fetchAndRenderRef.current = fetchAndRender;
-  }, [fetchAndRender]);
+  // ref를 항상 최신 fetchAndRender로 즉시 동기화
+  fetchAndRenderRef.current = fetchAndRender;
+
+  // 내 위치 빨간 점 추가
+  const addMyLocationMarker = useCallback((map, lat, lng) => {
+    if (myLocationMarkerRef.current) {
+      myLocationMarkerRef.current.remove();
+    }
+    const myLocIcon = L.divIcon({
+      html: `
+        <div style="position:relative;width:30px;height:30px;">
+          <div style="position:absolute;inset:0;background:rgba(239,68,68,0.2);border-radius:50%;animation:pulse-ring 1.5s ease-out infinite;"></div>
+          <div style="position:absolute;top:7px;left:7px;width:16px;height:16px;background:#EF4444;border:3px solid white;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.35);"></div>
+        </div>`,
+      className: '',
+      iconSize: [30, 30],
+      iconAnchor: [15, 15],
+    });
+    myLocationMarkerRef.current = L.marker([lat, lng], { icon: myLocIcon, zIndexOffset: 1000 })
+      .addTo(map)
+      .bindPopup('내 위치');
+    myLocationRef.current = { lat, lng };
+  }, []);
+
+  // 현위치로 이동
+  const goToMyLocation = useCallback(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          map.setView([lat, lng], 14);
+          addMyLocationMarker(map, lat, lng);
+        },
+        () => {
+          // 위치 권한 거부 시 기존 위치로
+          if (myLocationRef.current) {
+            map.setView([myLocationRef.current.lat, myLocationRef.current.lng], 14);
+          }
+        }
+      );
+    }
+  }, [addMyLocationMarker]);
 
   // 지도 초기화
   useEffect(() => {
@@ -202,47 +241,29 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
       bounceAtZoomLimits: false,
     });
 
-    // 줌 컨트롤 우측 배치
     L.control.zoom({ position: 'topright' }).addTo(map);
 
-    // OpenStreetMap 타일
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       maxZoom: 19,
     }).addTo(map);
 
-    // 마커 레이어 그룹
     markersLayerRef.current = L.layerGroup().addTo(map);
     mapInstanceRef.current = map;
 
-    // 최신 fetchAndRender를 호출하는 래퍼
     const callFetch = () => {
       if (fetchAndRenderRef.current) fetchAndRenderRef.current();
     };
 
-    // 현재 위치로 이동 + 빨간 점 표시
+    // 현재 위치로 이동 + 빨간 점
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const lat = pos.coords.latitude;
           const lng = pos.coords.longitude;
           map.setView([lat, lng], 13);
-
-          // 내 위치 빨간 점 마커 (크게)
-          const myLocIcon = L.divIcon({
-            html: `
-              <div style="position:relative;width:30px;height:30px;">
-                <div style="position:absolute;inset:0;background:rgba(239,68,68,0.2);border-radius:50%;animation:pulse-ring 1.5s ease-out infinite;"></div>
-                <div style="position:absolute;top:7px;left:7px;width:16px;height:16px;background:#EF4444;border:3px solid white;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.35);"></div>
-              </div>`,
-            className: '',
-            iconSize: [30, 30],
-            iconAnchor: [15, 15],
-          });
-          myLocationMarkerRef.current = L.marker([lat, lng], { icon: myLocIcon, zIndexOffset: 1000 })
-            .addTo(map)
-            .bindPopup('내 위치');
-          // setView triggers moveend → callFetch will run
+          addMyLocationMarker(map, lat, lng);
+          // setView → moveend → callFetch
         },
         () => {
           callFetch();
@@ -252,7 +273,7 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
       callFetch();
     }
 
-    // 지도 이동/줌 완료 시 API 호출 (디바운스 500ms)
+    // 디바운스된 moveend 이벤트
     map.on('moveend', () => {
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = setTimeout(() => {
@@ -274,7 +295,7 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
     }
   }, [filters, renderMarkers]);
 
-  // 검색 트리거: 지역 선택 시 해당 지역으로 이동 → moveend에서 자동 fetch
+  // 검색 트리거
   useEffect(() => {
     if (!searchTrigger) return;
     const map = mapInstanceRef.current;
@@ -284,8 +305,7 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
     if (regionCenter) {
       map.setView([regionCenter.lat, regionCenter.lng], 11);
     } else {
-      // 지역 미선택 시 현재 위치에서 다시 fetch
-      fetchAndRender();
+      if (fetchAndRenderRef.current) fetchAndRenderRef.current();
     }
   }, [searchTrigger]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -298,6 +318,20 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
   }, [selectedStation]);
 
   return (
-    <div ref={mapRef} className="w-full h-full" />
+    <div className="relative w-full h-full">
+      <div ref={mapRef} className="w-full h-full" />
+      {/* 현위치 버튼 */}
+      <button
+        onClick={goToMyLocation}
+        className="touch-btn absolute z-[1000] bg-white rounded-lg shadow-lg p-2.5 hover:bg-gray-50 active:bg-gray-100 transition-colors"
+        style={{ right: '10px', bottom: 'calc(60px + var(--sab))' }}
+        title="내 위치로 이동"
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>
+        </svg>
+      </button>
+    </div>
   );
 }
