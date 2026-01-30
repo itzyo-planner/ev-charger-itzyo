@@ -117,11 +117,11 @@ export default function App() {
       {/* ===== 데스크톱: 사이드바 토글 버튼 ===== */}
       <button
         onClick={() => setSidebarOpen(!sidebarOpen)}
-        className="hidden md:block fixed top-1/2 z-30 -translate-y-1/2 bg-white shadow-lg rounded-r-md p-1 hover:bg-gray-100 transition-all"
+        className="hidden md:flex fixed top-1/2 z-30 -translate-y-1/2 bg-white shadow-lg rounded-r-lg px-1.5 py-6 hover:bg-gray-100 transition-all items-center justify-center"
         style={{ left: sidebarOpen ? '360px' : '0px' }}
       >
-        <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        <svg className="w-6 h-6 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
             d={sidebarOpen ? 'M15 19l-7-7 7-7' : 'M9 5l7 7-7 7'} />
         </svg>
       </button>
