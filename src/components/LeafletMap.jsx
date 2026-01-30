@@ -50,6 +50,7 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
   const fetchControllerRef = useRef(null);
   const cachedStationsRef = useRef([]);
   const debounceTimerRef = useRef(null);
+  const fetchAndRenderRef = useRef(null);
 
   // 필터링
   const filterStations = useCallback((stations) => {
@@ -171,6 +172,11 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
     }
   }, [renderMarkers, onLoadingChange, onErrorChange]);
 
+  // ref를 항상 최신 fetchAndRender로 유지
+  useEffect(() => {
+    fetchAndRenderRef.current = fetchAndRender;
+  }, [fetchAndRender]);
+
   // 지도 초기화
   useEffect(() => {
     if (mapInstanceRef.current || !mapRef.current) return;
@@ -199,6 +205,11 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
     markersLayerRef.current = L.layerGroup().addTo(map);
     mapInstanceRef.current = map;
 
+    // 최신 fetchAndRender를 호출하는 래퍼
+    const callFetch = () => {
+      if (fetchAndRenderRef.current) fetchAndRenderRef.current();
+    };
+
     // 현재 위치로 이동 + 빨간 점 표시
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -221,20 +232,21 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
           myLocationMarkerRef.current = L.marker([lat, lng], { icon: myLocIcon, zIndexOffset: 1000 })
             .addTo(map)
             .bindPopup('내 위치');
+          // setView triggers moveend → callFetch will run
         },
         () => {
-          fetchAndRender();
+          callFetch();
         }
       );
     } else {
-      fetchAndRender();
+      callFetch();
     }
 
-    // 지도 이동/줌 완료 시 API 호출 (디바운스 500ms — 빠른 연속 이동 시 중복 호출 방지)
+    // 지도 이동/줌 완료 시 API 호출 (디바운스 500ms)
     map.on('moveend', () => {
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = setTimeout(() => {
-        fetchAndRender();
+        callFetch();
       }, 500);
     });
 

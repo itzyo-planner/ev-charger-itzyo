@@ -82,8 +82,7 @@ export default function Sidebar({ filters, onFiltersChange, stations, selectedSt
               <select
                 value={filters.region}
                 onChange={(e) => {
-                  updateFilter('region', e.target.value);
-                  updateFilter('district', '');
+                  onFiltersChange({ ...filters, region: e.target.value, district: '' });
                 }}
                 className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               >

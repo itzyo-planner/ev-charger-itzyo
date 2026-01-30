@@ -1,10 +1,8 @@
 // 한국환경공단 전기자동차 충전소 공공데이터 API
 const SERVICE_KEY = 'ada87e1014ef7984e17193005501805bb19b4effcc00fc8659eb3a62dcd6fc53';
 
-// 개발 환경에서는 Vite 프록시, 프로덕션에서는 직접 호출
-const BASE_URL = import.meta.env.DEV
-  ? '/api/EvCharger'
-  : 'https://apis.data.go.kr/B552584/EvCharger';
+// 개발: Vite 프록시, 프로덕션: Cloudflare Pages Function 프록시
+const BASE_URL = '/api/EvCharger';
 
 // 충전기 타입 코드 매핑 (API → 앱)
 const CHARGER_TYPE_MAP = {
