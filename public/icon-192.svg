@@ -1,4 +1,39 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192">
-  <rect width="192" height="192" rx="40" fill="#2563EB"/>
-  <text x="96" y="110" text-anchor="middle" font-size="80" font-family="Arial" fill="white">⚡</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#DBEAFE"/>
+      <stop offset="100%" stop-color="#B3D4FC"/>
+    </linearGradient>
+    <linearGradient id="plug" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#3B82F6"/>
+      <stop offset="100%" stop-color="#1D4ED8"/>
+    </linearGradient>
+    <linearGradient id="pin" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0%" stop-color="#4ADE80"/>
+      <stop offset="100%" stop-color="#16A34A"/>
+    </linearGradient>
+  </defs>
+  <rect width="192" height="192" rx="40" fill="url(#bg)"/>
+  <!-- White circle -->
+  <circle cx="102" cy="78" r="42" fill="white"/>
+  <!-- Blue cable -->
+  <path d="M68 52 C42 52 32 76 32 90 C32 112 52 124 72 124 L126 124 C144 124 156 108 156 88 C156 72 148 58 138 52"
+        fill="none" stroke="url(#plug)" stroke-width="7" stroke-linecap="round"/>
+  <!-- Plug body -->
+  <rect x="52" y="38" width="24" height="20" rx="4" fill="url(#plug)"/>
+  <rect x="58" y="28" width="4" height="14" rx="2" fill="#CBD5E1"/>
+  <rect x="68" y="28" width="4" height="14" rx="2" fill="#CBD5E1"/>
+  <!-- Lightning on plug -->
+  <path d="M66 43 L62 49 L66 49 L63 55 L70 48 L66 48 L69 43Z" fill="#FBBF24"/>
+  <!-- Pin -->
+  <path d="M102 56 C90 56 82 66 82 76 C82 90 102 108 102 108 C102 108 122 90 122 76 C122 66 114 56 102 56Z" fill="url(#pin)"/>
+  <!-- Battery in pin -->
+  <rect x="94" y="68" width="16" height="11" rx="2" fill="white"/>
+  <rect x="110" y="71" width="2.5" height="4" rx="1" fill="white"/>
+  <rect x="96" y="70" width="7" height="7" rx="1" fill="#22C55E"/>
+  <path d="M101 70 L99 74 L101 74 L99 77 L103 73 L101 73 L103 70Z" fill="white"/>
+  <!-- EV itzyo -->
+  <text x="96" y="156" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-weight="bold" font-size="20">
+    <tspan fill="#1E40AF">EV</tspan><tspan fill="#1E40AF" font-size="6"> </tspan><tspan fill="#16A34A">it</tspan><tspan fill="#CA8A04">zyo</tspan>
+  </text>
 </svg>

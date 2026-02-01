@@ -70,8 +70,8 @@ export default function App() {
 
       {/* ===== 상단 타이틀 ===== */}
       <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 bg-white rounded-full shadow-lg px-5 py-2 md:px-6 md:py-2.5 flex items-center gap-1.5">
-        <span className="text-base md:text-lg">⚡</span>
-        <span className="text-xs md:text-sm font-semibold text-blue-600">전기차 충전소</span>
+        <span className="text-base md:text-lg font-bold text-blue-700">EV</span>
+        <span className="text-base md:text-lg font-bold"><span className="text-green-600">it</span><span className="text-yellow-600">zyo</span></span>
       </div>
 
       {/* ===== 로딩 인디케이터 ===== */}
