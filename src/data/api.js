@@ -211,7 +211,8 @@ export function filterByBounds(stations, bounds) {
   );
 }
 
-// 공공데이터 API 호출 (zscode 기반)
+// 공공데이터 API 호출 (지역코드 기반)
+// API 파라미터: zcode = 시도코드(2자리), zscode = 시군구코드(5자리)
 export async function fetchChargers({ zscode, region, numOfRows = 9999, pageNo = 1 } = {}) {
   const params = new URLSearchParams({
     serviceKey: SERVICE_KEY,
@@ -219,11 +220,14 @@ export async function fetchChargers({ zscode, region, numOfRows = 9999, pageNo =
     numOfRows: String(numOfRows),
   });
 
-  // zscode 직접 전달 또는 region 키로 변환
-  if (zscode) {
-    params.set('zscode', zscode);
-  } else if (region && REGION_CODE_MAP[region]) {
-    params.set('zscode', REGION_CODE_MAP[region]);
+  // 지역코드 설정: 2자리는 zcode, 5자리는 zscode
+  const code = zscode || (region && REGION_CODE_MAP[region]) || '';
+  if (code) {
+    if (code.length <= 2) {
+      params.set('zcode', code);
+    } else {
+      params.set('zscode', code);
+    }
   }
 
   const url = `${BASE_URL}/getChargerInfo?${params.toString()}`;
