@@ -324,9 +324,10 @@ export async function fetchChargersInMapBounds({ centerLat, centerLng, bounds, n
     .map(r => ({ ...r, dist: distanceKm(centerLat, centerLng, r.lat, r.lng) }))
     .sort((a, b) => a.dist - b.dist);
 
-  // 항상 가장 가까운 2개 지역은 무조건 포함 (행정구역 중심이 멀어도 커버)
+  // 항상 가장 가까운 3개 지역은 무조건 포함
+  // (충남 도청=홍성, 경기 도청=수원 등 행정구역 중심이 실제 도시와 먼 경우 커버)
   for (const region of allByDist) {
-    if (visibleRegions.length >= 2) break;
+    if (visibleRegions.length >= 3) break;
     if (!regionCodes.has(region.code)) {
       visibleRegions.push(region);
       regionCodes.add(region.code);
@@ -336,7 +337,8 @@ export async function fetchChargersInMapBounds({ centerLat, centerLng, bounds, n
   console.log('[fetchChargersInMapBounds] fetch 지역:', visibleRegions.map(r => r.name).join(', '));
 
   if (visibleRegions.length === 0) {
-    const result = await fetchChargers({ zscode: closestCode, numOfRows, pageNo: 1 });
+    const fallbackCode = allByDist[0]?.code || '11';
+    const result = await fetchChargers({ zscode: fallbackCode, numOfRows, pageNo: 1 });
     let stations = result.stations;
     if (radiusKm) {
       stations = stations.filter(s => distanceKm(centerLat, centerLng, s.lat, s.lng) <= radiusKm);
