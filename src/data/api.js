@@ -293,8 +293,17 @@ export async function fetchChargers({ zscode, region, numOfRows = 9999, pageNo =
   return result;
 }
 
-// 지도 바운드 기반 충전소 조회 (보이는 지역 모두 fetch)
-export async function fetchChargersInMapBounds({ centerLat, centerLng, bounds, numOfRows = 9999, zscodeOverride, skipBoundsFilter = false } = {}) {
+// 두 좌표 간 거리(km) 계산 (Haversine)
+export function distanceKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// 지도 바운드 기반 충전소 조회 (보이는 지역 + 가장 가까운 지역 fetch)
+export async function fetchChargersInMapBounds({ centerLat, centerLng, bounds, numOfRows = 9999, zscodeOverride, skipBoundsFilter = false, radiusKm } = {}) {
   // 지역 코드가 직접 지정된 경우 (검색 버튼으로 지역 선택)
   if (zscodeOverride) {
     console.log('[fetchChargersInMapBounds] 지역 직접 지정:', zscodeOverride);
@@ -304,17 +313,37 @@ export async function fetchChargersInMapBounds({ centerLat, centerLng, bounds, n
 
   // 지도 바운드 안에 중심이 들어오는 모든 지역 찾기
   const visibleRegions = getVisibleRegions(bounds);
-  console.log('[fetchChargersInMapBounds] 보이는 지역:', visibleRegions.map(r => r.name).join(', '));
+
+  // 항상 지도 중심에서 가장 가까운 지역도 포함 (경계 문제 해결)
+  const closestCode = estimateRegionCode(centerLat, centerLng);
+  const regionCodes = new Set(visibleRegions.map(r => r.code));
+  if (!regionCodes.has(closestCode)) {
+    const closestRegion = REGION_BOUNDS.find(r => r.code === closestCode);
+    if (closestRegion) visibleRegions.push(closestRegion);
+  }
+
+  // 인접 지역도 추가 (중심에서 80km 이내인 지역)
+  for (const region of REGION_BOUNDS) {
+    if (!regionCodes.has(region.code)) {
+      const dist = distanceKm(centerLat, centerLng, region.lat, region.lng);
+      if (dist < 80) {
+        visibleRegions.push(region);
+        regionCodes.add(region.code);
+      }
+    }
+  }
+
+  console.log('[fetchChargersInMapBounds] fetch 지역:', visibleRegions.map(r => r.name).join(', '));
 
   if (visibleRegions.length === 0) {
-    // 바운드 안에 지역 중심이 없으면 가장 가까운 지역 1개
-    const code = estimateRegionCode(centerLat, centerLng);
-    const result = await fetchChargers({ zscode: code, numOfRows, pageNo: 1 });
+    const result = await fetchChargers({ zscode: closestCode, numOfRows, pageNo: 1 });
     let stations = result.stations;
-    if (!skipBoundsFilter && bounds) {
+    if (radiusKm) {
+      stations = stations.filter(s => distanceKm(centerLat, centerLng, s.lat, s.lng) <= radiusKm);
+    } else if (!skipBoundsFilter && bounds) {
       stations = filterByBounds(stations, bounds);
     }
-    return { totalCount: result.totalCount, stations, zscode: code };
+    return { totalCount: result.totalCount, stations, zscode: closestCode };
   }
 
   // 보이는 지역 모두 병렬 fetch
@@ -330,8 +359,12 @@ export async function fetchChargersInMapBounds({ centerLat, centerLng, bounds, n
   const totalCount = results.reduce((sum, r) => sum + r.totalCount, 0);
   console.log('[fetchChargersInMapBounds] 전체 충전소:', allStations.length, '(', visibleRegions.length, '개 지역)');
 
-  // bounds 필터 (선택적)
-  if (!skipBoundsFilter && bounds) {
+  // 반경 필터 (radiusKm 지정된 경우)
+  if (radiusKm) {
+    const before = allStations.length;
+    allStations = allStations.filter(s => distanceKm(centerLat, centerLng, s.lat, s.lng) <= radiusKm);
+    console.log('[fetchChargersInMapBounds] 반경 필터 (' + radiusKm + 'km):', before, '→', allStations.length);
+  } else if (!skipBoundsFilter && bounds) {
     const before = allStations.length;
     allStations = filterByBounds(allStations, bounds);
     console.log('[fetchChargersInMapBounds] bounds 필터:', before, '→', allStations.length);

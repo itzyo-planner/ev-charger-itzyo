@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import 'leaflet.markercluster'
@@ -94,12 +94,18 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
   const clusterGroupRef = useRef(null);
   const myLocationMarkerRef = useRef(null);
   const myLocationRef = useRef(null);
+  const radiusCircleRef = useRef(null);
   const fetchControllerRef = useRef(null);
   const cachedStationsRef = useRef([]);
   const debounceTimerRef = useRef(null);
   const fetchAndRenderRef = useRef(null);
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
+
+  // 반경 (km)
+  const [radiusKm, setRadiusKm] = useState(10);
+  const radiusKmRef = useRef(radiusKm);
+  radiusKmRef.current = radiusKm;
 
   // 지역 검색 여부를 ref로 관리
   const isRegionSearchRef = useRef(false);
@@ -194,13 +200,31 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
     isRegionSearchRef.current = false;
 
     const zoom = map.getZoom();
-    console.log('[fetchAndRender] 줌:', zoom, 'region:', selectedRegion);
+    const currentRadiusKm = radiusKmRef.current;
+    console.log('[fetchAndRender] 줌:', zoom, 'region:', selectedRegion, '반경:', currentRadiusKm, 'km');
 
     const requestId = Date.now();
     fetchControllerRef.current = requestId;
 
     onLoadingChange(true);
     onErrorChange(null);
+
+    // 반경 원 표시
+    if (radiusCircleRef.current) {
+      map.removeLayer(radiusCircleRef.current);
+      radiusCircleRef.current = null;
+    }
+    if (!zscodeOverride) {
+      radiusCircleRef.current = L.circle([mapCenter.lat, mapCenter.lng], {
+        radius: currentRadiusKm * 1000,
+        color: '#3B82F6',
+        fillColor: '#3B82F6',
+        fillOpacity: 0.06,
+        weight: 1.5,
+        dashArray: '6 4',
+        interactive: false,
+      }).addTo(map);
+    }
 
     try {
       const result = await fetchChargersInMapBounds({
@@ -209,6 +233,7 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
         bounds,
         zscodeOverride,
         skipBoundsFilter,
+        radiusKm: zscodeOverride ? undefined : currentRadiusKm,
       });
 
       if (fetchControllerRef.current !== requestId) return;
@@ -385,24 +410,43 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
     }
   }, [selectedStation]);
 
+  // 반경 변경 핸들러
+  const handleRadiusChange = useCallback((e) => {
+    const val = parseInt(e.target.value);
+    setRadiusKm(val);
+    radiusKmRef.current = val;
+  }, []);
+
   return (
     <div className="relative w-full h-full">
       <div ref={mapRef} className="w-full h-full" />
 
-      {/* 현위치에서 조회 버튼 */}
-      <button
-        onClick={searchHere}
-        className="touch-btn absolute z-[1000] bg-blue-600 text-white rounded-full shadow-lg px-4 py-2 text-sm font-semibold hover:bg-blue-700 active:bg-blue-800 transition-colors"
+      {/* 반경 조절 + 현위치 조회 */}
+      <div
+        className="absolute z-[1000] flex items-center gap-2 bg-white rounded-full shadow-lg px-3 py-2"
         style={{ left: '50%', transform: 'translateX(-50%)', bottom: 'calc(110px + var(--sab))' }}
       >
-        <span className="flex items-center gap-1.5">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <input
+          type="range"
+          min="3"
+          max="50"
+          step="1"
+          value={radiusKm}
+          onChange={handleRadiusChange}
+          className="w-20 h-1.5 accent-blue-600"
+        />
+        <span className="text-xs text-gray-600 font-medium w-10 text-center">{radiusKm}km</span>
+        <button
+          onClick={searchHere}
+          className="touch-btn bg-blue-600 text-white rounded-full shadow px-3 py-1.5 text-xs font-semibold hover:bg-blue-700 active:bg-blue-800 transition-colors flex items-center gap-1"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="11" cy="11" r="8"/>
             <line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
-          현위치에서 조회
-        </span>
-      </button>
+          조회
+        </button>
+      </div>
 
       {/* 내 위치 버튼 */}
       <button

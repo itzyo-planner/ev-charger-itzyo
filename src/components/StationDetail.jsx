@@ -112,6 +112,61 @@ export default function StationDetail({ station, onClose }) {
             </div>
           </div>
 
+          {/* 길찾기 버튼 */}
+          <div className="px-4 pb-3">
+            <h3 className="text-sm font-bold text-gray-900 mb-2 flex items-center gap-1.5">
+              <svg className="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+              </svg>
+              길찾기
+            </h3>
+            <div className="flex gap-2">
+              <a
+                href={`tmap://route?goalname=${encodeURIComponent(station.name)}&goalx=${station.lng}&goaly=${station.lat}`}
+                className="flex-1 flex items-center justify-center gap-1.5 bg-blue-600 text-white rounded-lg py-2.5 text-xs font-semibold active:bg-blue-700 transition-colors"
+                onClick={(e) => {
+                  // 모바일 앱이 없으면 웹으로 fallback
+                  setTimeout(() => {
+                    window.open(`https://apis.openapi.sk.com/tmap/app/routes?appKey=&name=${encodeURIComponent(station.name)}&lon=${station.lng}&lat=${station.lat}`, '_blank');
+                  }, 500);
+                }}
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                </svg>
+                T맵
+              </a>
+              <a
+                href={`nmap://route/car?dlat=${station.lat}&dlng=${station.lng}&dname=${encodeURIComponent(station.name)}&appname=ev.itzyo`}
+                className="flex-1 flex items-center justify-center gap-1.5 bg-green-600 text-white rounded-lg py-2.5 text-xs font-semibold active:bg-green-700 transition-colors"
+                onClick={(e) => {
+                  setTimeout(() => {
+                    window.open(`https://map.naver.com/p/directions/-/-/${station.lng},${station.lat},${encodeURIComponent(station.name)}/-/car`, '_blank');
+                  }, 500);
+                }}
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                </svg>
+                네이버내비
+              </a>
+              <a
+                href={`kakaomap://route?ep=${station.lat},${station.lng}&by=CAR`}
+                className="flex-1 flex items-center justify-center gap-1.5 bg-yellow-500 text-gray-900 rounded-lg py-2.5 text-xs font-semibold active:bg-yellow-600 transition-colors"
+                onClick={(e) => {
+                  setTimeout(() => {
+                    window.open(`https://map.kakao.com/link/to/${encodeURIComponent(station.name)},${station.lat},${station.lng}`, '_blank');
+                  }, 500);
+                }}
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                </svg>
+                카카오맵
+              </a>
+            </div>
+          </div>
+
           {/* 상세정보 섹션 */}
           <div className="px-4 pb-4">
             <h3 className="text-sm font-bold text-gray-900 mb-2 flex items-center gap-1.5">
