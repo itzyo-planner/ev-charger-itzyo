@@ -350,12 +350,15 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
       callFetch();
     }
 
-    // 디바운스된 moveend (지도 이동/줌 시 자동 갱신)
+    // moveend에서는 자동 fetch하지 않음 (속도 개선)
+    // 사용자가 "조회" 버튼을 눌러야 fetch
+    // 단, 반경 원만 업데이트
     map.on('moveend', () => {
-      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-      debounceTimerRef.current = setTimeout(() => {
-        callFetch();
-      }, 600);
+      // 반경 원 위치만 업데이트
+      const mc = map.getCenter();
+      if (radiusCircleRef.current) {
+        radiusCircleRef.current.setLatLng([mc.lat, mc.lng]);
+      }
     });
 
     return () => {
@@ -421,11 +424,12 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
     <div className="relative w-full h-full">
       <div ref={mapRef} className="w-full h-full" />
 
-      {/* 반경 조절 + 현위치 조회 */}
+      {/* 반경 조절 + 조회 버튼 — 좌측 하단 세로 배치 */}
       <div
-        className="absolute z-[1000] flex items-center gap-2 bg-white rounded-full shadow-lg px-3 py-2"
-        style={{ left: '50%', transform: 'translateX(-50%)', bottom: 'calc(110px + var(--sab))' }}
+        className="absolute z-[1000] flex flex-col items-center gap-1 bg-white rounded-xl shadow-lg px-2 py-2"
+        style={{ left: '10px', bottom: 'calc(60px + var(--sab))' }}
       >
+        <span className="text-[10px] text-gray-500 font-medium">반경</span>
         <input
           type="range"
           min="3"
@@ -433,14 +437,15 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
           step="1"
           value={radiusKm}
           onChange={handleRadiusChange}
-          className="w-20 h-1.5 accent-blue-600"
+          className="h-20 accent-blue-600"
+          style={{ writingMode: 'vertical-lr', direction: 'rtl', width: '20px' }}
         />
-        <span className="text-xs text-gray-600 font-medium w-10 text-center">{radiusKm}km</span>
+        <span className="text-[11px] text-blue-600 font-bold">{radiusKm}km</span>
         <button
           onClick={searchHere}
-          className="touch-btn bg-blue-600 text-white rounded-full shadow px-3 py-1.5 text-xs font-semibold hover:bg-blue-700 active:bg-blue-800 transition-colors flex items-center gap-1"
+          className="touch-btn bg-blue-600 text-white rounded-lg shadow px-2 py-1.5 text-[10px] font-bold hover:bg-blue-700 active:bg-blue-800 transition-colors flex items-center gap-0.5"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="11" cy="11" r="8"/>
             <line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
@@ -448,7 +453,7 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
         </button>
       </div>
 
-      {/* 내 위치 버튼 */}
+      {/* 내 위치 버튼 — 우측 하단 */}
       <button
         onClick={goToMyLocation}
         className="touch-btn absolute z-[1000] bg-white rounded-lg shadow-lg p-2.5 hover:bg-gray-50 active:bg-gray-100 transition-colors"
