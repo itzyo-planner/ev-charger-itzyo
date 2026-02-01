@@ -1,9 +1,12 @@
 import { useEffect, useRef, useCallback } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import 'leaflet.markercluster'
+import 'leaflet.markercluster/dist/MarkerCluster.css'
+import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
 import { fetchChargersInMapBounds, getRegionCenter, REGION_CODE_MAP } from '../data/api'
 
-// 내 위치 펄스 애니메이션 CSS 주입
+// 내 위치 펄스 애니메이션 + 클러스터 스타일 CSS 주입
 if (typeof document !== 'undefined' && !document.getElementById('my-loc-pulse')) {
   const style = document.createElement('style');
   style.id = 'my-loc-pulse';
@@ -11,7 +14,31 @@ if (typeof document !== 'undefined' && !document.getElementById('my-loc-pulse'))
     @keyframes pulse-ring {
       0% { transform: scale(1); opacity: 1; }
       100% { transform: scale(2.5); opacity: 0; }
-    }`;
+    }
+    .marker-cluster-custom {
+      background: rgba(59, 130, 246, 0.25);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .marker-cluster-custom div {
+      background: rgba(59, 130, 246, 0.85);
+      color: white;
+      font-weight: bold;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2.5px solid white;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    }
+    .marker-cluster-small { width: 40px; height: 40px; }
+    .marker-cluster-small div { width: 30px; height: 30px; font-size: 12px; }
+    .marker-cluster-medium { width: 50px; height: 50px; }
+    .marker-cluster-medium div { width: 38px; height: 38px; font-size: 13px; }
+    .marker-cluster-large { width: 64px; height: 64px; }
+    .marker-cluster-large div { width: 50px; height: 50px; font-size: 15px; }`;
   document.head.appendChild(style);
 }
 
@@ -24,7 +51,7 @@ const STATUS_COLORS = {
   restricted: '#A855F7',
 };
 
-// 원형 마커 아이콘 생성 (스크린샷처럼 원형 + 숫자)
+// 원형 마커 아이콘 생성
 function createMarkerIcon(color, count) {
   const size = count > 99 ? 40 : 34;
   const fontSize = count > 99 ? 11 : 13;
@@ -45,7 +72,7 @@ function createMarkerIcon(color, count) {
 export default function LeafletMap({ center, filters, selectedStation, onSelectStation, onMapUpdate, onLoadingChange, onErrorChange, searchTrigger }) {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
-  const markersLayerRef = useRef(null);
+  const clusterGroupRef = useRef(null);
   const myLocationMarkerRef = useRef(null);
   const myLocationRef = useRef(null);
   const fetchControllerRef = useRef(null);
@@ -54,6 +81,9 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
   const fetchAndRenderRef = useRef(null);
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
+
+  // 지역 검색 여부를 ref로 관리
+  const isRegionSearchRef = useRef(false);
 
   // 필터링
   const filterStations = useCallback((stations) => {
@@ -74,29 +104,57 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
     });
   }, [filters]);
 
-  // 마커 렌더링
+  // 마커 렌더링 (markercluster 사용)
   const renderMarkers = useCallback((stations) => {
     const map = mapInstanceRef.current;
     if (!map) return;
 
-    if (markersLayerRef.current) {
-      markersLayerRef.current.clearLayers();
+    // 기존 클러스터 그룹 제거
+    if (clusterGroupRef.current) {
+      map.removeLayer(clusterGroupRef.current);
     }
 
     const filtered = filterStations(stations);
     onMapUpdate(filtered);
+
+    // MarkerClusterGroup 생성 (줌 레벨에 따른 클러스터 설정)
+    const clusterGroup = L.markerClusterGroup({
+      maxClusterRadius: (zoom) => {
+        if (zoom <= 8) return 120;
+        if (zoom <= 10) return 80;
+        if (zoom <= 12) return 50;
+        return 30;
+      },
+      spiderfyOnMaxZoom: true,
+      showCoverageOnHover: false,
+      zoomToBoundsOnClick: true,
+      disableClusteringAtZoom: 15,
+      chunkedLoading: true,
+      iconCreateFunction: (cluster) => {
+        const count = cluster.getChildCount();
+        let className = 'marker-cluster-custom marker-cluster-';
+        if (count < 20) className += 'small';
+        else if (count < 100) className += 'medium';
+        else className += 'large';
+        return L.divIcon({
+          html: `<div>${count}</div>`,
+          className,
+          iconSize: L.point(40, 40),
+        });
+      },
+    });
 
     filtered.forEach((station) => {
       const color = STATUS_COLORS[station.status] || STATUS_COLORS.unknown;
       const icon = createMarkerIcon(color, station.chargerCount);
       const marker = L.marker([station.lat, station.lng], { icon });
       marker.on('click', () => onSelectStation(station));
-      markersLayerRef.current.addLayer(marker);
+      clusterGroup.addLayer(marker);
     });
-  }, [filterStations, onMapUpdate, onSelectStation]);
 
-  // 지역 검색 여부를 ref로 관리 (bounds 필터 건너뛰기 용)
-  const isRegionSearchRef = useRef(false);
+    map.addLayer(clusterGroup);
+    clusterGroupRef.current = clusterGroup;
+  }, [filterStations, onMapUpdate, onSelectStation]);
 
   // API 호출 + 마커 렌더링
   const fetchAndRender = useCallback(async () => {
@@ -117,10 +175,10 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
     const selectedRegion = filtersRef.current.region;
     const zscodeOverride = selectedRegion ? REGION_CODE_MAP[selectedRegion] : undefined;
     const skipBoundsFilter = isRegionSearchRef.current;
-    isRegionSearchRef.current = false; // 한 번 사용 후 리셋
+    isRegionSearchRef.current = false;
 
-    console.log('[fetchAndRender] 시작 - region:', selectedRegion, 'zscodeOverride:', zscodeOverride, 'skipBoundsFilter:', skipBoundsFilter);
-    console.log('[fetchAndRender] 지도 중심:', mapCenter.lat, mapCenter.lng, '줌:', map.getZoom());
+    const zoom = map.getZoom();
+    console.log('[fetchAndRender] 줌:', zoom, 'region:', selectedRegion, 'zscodeOverride:', zscodeOverride);
 
     const requestId = Date.now();
     fetchControllerRef.current = requestId;
@@ -194,7 +252,6 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
           addMyLocationMarker(map, lat, lng);
         },
         () => {
-          // 위치 권한 거부 시 기존 위치로
           if (myLocationRef.current) {
             map.setView([myLocationRef.current.lat, myLocationRef.current.lng], 14);
           }
@@ -225,7 +282,6 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
       maxZoom: 19,
     }).addTo(map);
 
-    markersLayerRef.current = L.layerGroup().addTo(map);
     mapInstanceRef.current = map;
 
     const callFetch = () => {
@@ -240,7 +296,6 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
           const lng = pos.coords.longitude;
           map.setView([lat, lng], 13);
           addMyLocationMarker(map, lat, lng);
-          // setView → moveend → callFetch
         },
         () => {
           callFetch();
@@ -250,12 +305,12 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
       callFetch();
     }
 
-    // 디바운스된 moveend 이벤트
+    // 디바운스된 moveend 이벤트 (지도 이동/줌 시 데이터 갱신)
     map.on('moveend', () => {
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = setTimeout(() => {
         callFetch();
-      }, 500);
+      }, 600);
     });
 
     return () => {
@@ -280,7 +335,6 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
 
     console.log('[검색 트리거] searchTrigger:', searchTrigger, 'region:', filters.region);
 
-    // 기존 디바운스 타이머 취소 (중복 fetch 방지)
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
 
     // 지역 검색 플래그 설정 (bounds 필터 건너뛰기)
@@ -288,26 +342,19 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
 
     const regionCenter = getRegionCenter(filters.region);
     if (regionCenter) {
-      console.log('[검색 트리거] 지역 중심으로 이동:', regionCenter);
       const currentCenter = map.getCenter();
       const dist = Math.abs(currentCenter.lat - regionCenter.lat) + Math.abs(currentCenter.lng - regionCenter.lng);
 
       if (dist < 0.01) {
-        // 이미 해당 지역 근처 → 바로 fetch (moveend 안 발생할 수 있음)
-        console.log('[검색 트리거] 이미 근처에 있어서 바로 fetch');
         if (fetchAndRenderRef.current) fetchAndRenderRef.current();
       } else {
-        // 지역 중심으로 이동 → moveend 후 fetch
         map.once('moveend', () => {
-          console.log('[검색 트리거] moveend 발생 → fetch 실행');
           if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
           if (fetchAndRenderRef.current) fetchAndRenderRef.current();
         });
         map.setView([regionCenter.lat, regionCenter.lng], 11);
       }
     } else {
-      // 지역 미선택 시 현재 위치에서 바로 fetch
-      console.log('[검색 트리거] 지역 미선택 → 현재 위치에서 fetch');
       if (fetchAndRenderRef.current) fetchAndRenderRef.current();
     }
   }, [searchTrigger]); // eslint-disable-line react-hooks/exhaustive-deps

@@ -269,29 +269,61 @@ export async function fetchChargers({ zscode, region, numOfRows = 9999, pageNo =
   return { totalCount, stations, pageNo, numOfRows };
 }
 
-// 지도 바운드 기반 충전소 조회 (중심 좌표로 지역 추정 → API 호출 → 바운드 필터)
+// 지도 바운드 기반 충전소 조회 (보이는 지역 모두 fetch)
 export async function fetchChargersInMapBounds({ centerLat, centerLng, bounds, numOfRows = 9999, zscodeOverride, skipBoundsFilter = false } = {}) {
-  const zscode = zscodeOverride || estimateRegionCode(centerLat, centerLng);
-  console.log('[fetchChargersInMapBounds] zscode:', zscode, 'zscodeOverride:', zscodeOverride, 'skipBoundsFilter:', skipBoundsFilter);
-
-  // 한 번에 최대한 많이 가져오기 (numOfRows=9999)
-  const result = await fetchChargers({ zscode, numOfRows, pageNo: 1 });
-
-  let allStations = result.stations;
-  console.log('[fetchChargersInMapBounds] API에서 받은 충전소 수:', allStations.length);
-
-  // 지역 검색인 경우 bounds 필터 건너뛰기 (API가 이미 지역 필터링함)
-  if (!skipBoundsFilter && bounds) {
-    const beforeFilter = allStations.length;
-    allStations = filterByBounds(allStations, bounds);
-    console.log('[fetchChargersInMapBounds] bounds 필터:', beforeFilter, '→', allStations.length);
+  // 지역 코드가 직접 지정된 경우 (검색 버튼으로 지역 선택)
+  if (zscodeOverride) {
+    console.log('[fetchChargersInMapBounds] 지역 직접 지정:', zscodeOverride);
+    const result = await fetchChargers({ zscode: zscodeOverride, numOfRows, pageNo: 1 });
+    return { totalCount: result.totalCount, stations: result.stations, zscode: zscodeOverride };
   }
 
-  return {
-    totalCount: result.totalCount,
-    stations: allStations,
-    zscode,
-  };
+  // 지도 바운드 안에 중심이 들어오는 모든 지역 찾기
+  const visibleRegions = getVisibleRegions(bounds);
+  console.log('[fetchChargersInMapBounds] 보이는 지역:', visibleRegions.map(r => r.name).join(', '));
+
+  if (visibleRegions.length === 0) {
+    // 바운드 안에 지역 중심이 없으면 가장 가까운 지역 1개
+    const code = estimateRegionCode(centerLat, centerLng);
+    const result = await fetchChargers({ zscode: code, numOfRows, pageNo: 1 });
+    let stations = result.stations;
+    if (!skipBoundsFilter && bounds) {
+      stations = filterByBounds(stations, bounds);
+    }
+    return { totalCount: result.totalCount, stations, zscode: code };
+  }
+
+  // 보이는 지역 모두 병렬 fetch
+  const results = await Promise.all(
+    visibleRegions.map(r =>
+      fetchChargers({ zscode: r.code, numOfRows, pageNo: 1 })
+        .catch(err => { console.error('[API] 지역 fetch 실패:', r.name, err); return { stations: [], totalCount: 0 }; })
+    )
+  );
+
+  // 모든 결과 합치기
+  let allStations = results.flatMap(r => r.stations);
+  const totalCount = results.reduce((sum, r) => sum + r.totalCount, 0);
+  console.log('[fetchChargersInMapBounds] 전체 충전소:', allStations.length, '(', visibleRegions.length, '개 지역)');
+
+  // bounds 필터 (선택적)
+  if (!skipBoundsFilter && bounds) {
+    const before = allStations.length;
+    allStations = filterByBounds(allStations, bounds);
+    console.log('[fetchChargersInMapBounds] bounds 필터:', before, '→', allStations.length);
+  }
+
+  return { totalCount, stations: allStations, zscode: visibleRegions[0]?.code };
+}
+
+// 지도 바운드 안에 중심이 포함된 지역 목록 반환
+export function getVisibleRegions(bounds) {
+  if (!bounds) return [];
+  const { sw, ne } = bounds;
+  return REGION_BOUNDS.filter(r =>
+    r.lat >= sw.lat && r.lat <= ne.lat &&
+    r.lng >= sw.lng && r.lng <= ne.lng
+  );
 }
 
 // 지역 키 → 중심 좌표 조회
