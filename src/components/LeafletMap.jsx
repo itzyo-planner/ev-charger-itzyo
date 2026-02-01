@@ -51,6 +51,25 @@ const STATUS_COLORS = {
   restricted: '#A855F7',
 };
 
+// API 캐시 (지역코드 → {data, timestamp})
+const apiCache = new Map();
+const CACHE_TTL = 3 * 60 * 1000; // 3분
+
+function getCached(key) {
+  const entry = apiCache.get(key);
+  if (entry && Date.now() - entry.timestamp < CACHE_TTL) return entry.data;
+  return null;
+}
+
+function setCache(key, data) {
+  apiCache.set(key, { data, timestamp: Date.now() });
+  // 캐시 크기 제한 (최대 30개)
+  if (apiCache.size > 30) {
+    const oldest = apiCache.keys().next().value;
+    apiCache.delete(oldest);
+  }
+}
+
 // 원형 마커 아이콘 생성
 function createMarkerIcon(color, count) {
   const size = count > 99 ? 40 : 34;
@@ -109,7 +128,6 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
     const map = mapInstanceRef.current;
     if (!map) return;
 
-    // 기존 클러스터 그룹 제거
     if (clusterGroupRef.current) {
       map.removeLayer(clusterGroupRef.current);
     }
@@ -117,7 +135,6 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
     const filtered = filterStations(stations);
     onMapUpdate(filtered);
 
-    // MarkerClusterGroup 생성 (줌 레벨에 따른 클러스터 설정)
     const clusterGroup = L.markerClusterGroup({
       maxClusterRadius: (zoom) => {
         if (zoom <= 8) return 120;
@@ -171,14 +188,13 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
       ne: { lat: ne.lat, lng: ne.lng },
     };
 
-    // 사용자가 지역을 선택한 경우 해당 지역코드를 직접 사용
     const selectedRegion = filtersRef.current.region;
     const zscodeOverride = selectedRegion ? REGION_CODE_MAP[selectedRegion] : undefined;
     const skipBoundsFilter = isRegionSearchRef.current;
     isRegionSearchRef.current = false;
 
     const zoom = map.getZoom();
-    console.log('[fetchAndRender] 줌:', zoom, 'region:', selectedRegion, 'zscodeOverride:', zscodeOverride);
+    console.log('[fetchAndRender] 줌:', zoom, 'region:', selectedRegion);
 
     const requestId = Date.now();
     fetchControllerRef.current = requestId;
@@ -197,12 +213,12 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
 
       if (fetchControllerRef.current !== requestId) return;
 
-      console.log('[fetchAndRender] 결과 충전소 수:', result.stations.length);
+      console.log('[fetchAndRender] 결과:', result.stations.length, '개 충전소');
       cachedStationsRef.current = result.stations;
       renderMarkers(result.stations);
     } catch (err) {
       if (fetchControllerRef.current !== requestId) return;
-      console.error('[fetchAndRender] 충전소 API 조회 실패:', err);
+      console.error('[fetchAndRender] 실패:', err);
       onErrorChange('충전소 데이터를 불러오지 못했습니다.');
       if (cachedStationsRef.current.length > 0) {
         renderMarkers(cachedStationsRef.current);
@@ -214,7 +230,6 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
     }
   }, [renderMarkers, onLoadingChange, onErrorChange]);
 
-  // ref를 항상 최신 fetchAndRender로 즉시 동기화
   fetchAndRenderRef.current = fetchAndRender;
 
   // 내 위치 빨간 점 추가
@@ -238,7 +253,13 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
     myLocationRef.current = { lat, lng };
   }, []);
 
-  // 현위치로 이동
+  // "현위치에서 조회" — 현재 지도 위치 기준으로 충전소 검색 (줌 무관)
+  const searchHere = useCallback(() => {
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    if (fetchAndRenderRef.current) fetchAndRenderRef.current();
+  }, []);
+
+  // 현위치로 이동 + 조회
   const goToMyLocation = useCallback(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
@@ -288,7 +309,6 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
       if (fetchAndRenderRef.current) fetchAndRenderRef.current();
     };
 
-    // 현재 위치로 이동 + 빨간 점
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
@@ -305,7 +325,7 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
       callFetch();
     }
 
-    // 디바운스된 moveend 이벤트 (지도 이동/줌 시 데이터 갱신)
+    // 디바운스된 moveend (지도 이동/줌 시 자동 갱신)
     map.on('moveend', () => {
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = setTimeout(() => {
@@ -333,11 +353,9 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
     const map = mapInstanceRef.current;
     if (!map) return;
 
-    console.log('[검색 트리거] searchTrigger:', searchTrigger, 'region:', filters.region);
+    console.log('[검색 트리거] region:', filters.region);
 
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-
-    // 지역 검색 플래그 설정 (bounds 필터 건너뛰기)
     isRegionSearchRef.current = true;
 
     const regionCenter = getRegionCenter(filters.region);
@@ -370,7 +388,23 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
   return (
     <div className="relative w-full h-full">
       <div ref={mapRef} className="w-full h-full" />
-      {/* 현위치 버튼 */}
+
+      {/* 현위치에서 조회 버튼 */}
+      <button
+        onClick={searchHere}
+        className="touch-btn absolute z-[1000] bg-blue-600 text-white rounded-full shadow-lg px-4 py-2 text-sm font-semibold hover:bg-blue-700 active:bg-blue-800 transition-colors"
+        style={{ left: '50%', transform: 'translateX(-50%)', bottom: 'calc(110px + var(--sab))' }}
+      >
+        <span className="flex items-center gap-1.5">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="8"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          현위치에서 조회
+        </span>
+      </button>
+
+      {/* 내 위치 버튼 */}
       <button
         onClick={goToMyLocation}
         className="touch-btn absolute z-[1000] bg-white rounded-lg shadow-lg p-2.5 hover:bg-gray-50 active:bg-gray-100 transition-colors"

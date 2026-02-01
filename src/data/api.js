@@ -49,9 +49,9 @@ const REGION_CODE_MAP = {
   gangwon: '51',
 };
 
-// 위도/경도 → 지역코드 추정 (지도 바운드 중심 좌표 기반)
+// 시/도 중심 좌표 (시/도청 소재지 기준)
 const REGION_BOUNDS = [
-  { code: '11', lat: 37.5665, lng: 126.978, name: '서울' },
+  { code: '11', lat: 37.5665, lng: 126.9780, name: '서울' },
   { code: '26', lat: 35.1796, lng: 129.0756, name: '부산' },
   { code: '27', lat: 35.8714, lng: 128.6014, name: '대구' },
   { code: '28', lat: 37.4563, lng: 126.7052, name: '인천' },
@@ -59,15 +59,15 @@ const REGION_BOUNDS = [
   { code: '30', lat: 36.3504, lng: 127.3845, name: '대전' },
   { code: '31', lat: 35.5384, lng: 129.3114, name: '울산' },
   { code: '36', lat: 36.4800, lng: 127.0000, name: '세종' },
-  { code: '41', lat: 37.4138, lng: 127.5183, name: '경기' },
-  { code: '43', lat: 36.6357, lng: 127.4917, name: '충북' },
-  { code: '44', lat: 36.5184, lng: 126.8000, name: '충남' },
-  { code: '45', lat: 35.7175, lng: 127.1530, name: '전북' },
-  { code: '46', lat: 34.8679, lng: 126.9910, name: '전남' },
-  { code: '47', lat: 36.4919, lng: 128.8889, name: '경북' },
-  { code: '48', lat: 35.4606, lng: 128.2132, name: '경남' },
-  { code: '50', lat: 33.4996, lng: 126.5312, name: '제주' },
-  { code: '51', lat: 37.8228, lng: 128.1555, name: '강원' },
+  { code: '41', lat: 37.2750, lng: 127.0095, name: '경기' },  // 수원시청
+  { code: '43', lat: 36.6358, lng: 127.4913, name: '충북' },  // 청주시청
+  { code: '44', lat: 36.6588, lng: 126.6728, name: '충남' },  // 홍성군 (도청)
+  { code: '45', lat: 35.8203, lng: 127.1089, name: '전북' },  // 전주시청
+  { code: '46', lat: 34.8161, lng: 126.4629, name: '전남' },  // 무안군 (도청)
+  { code: '47', lat: 36.5760, lng: 128.5056, name: '경북' },  // 안동시청
+  { code: '48', lat: 35.2285, lng: 128.6811, name: '경남' },  // 창원시청
+  { code: '50', lat: 33.4996, lng: 126.5312, name: '제주' },  // 제주시청
+  { code: '51', lat: 37.8813, lng: 127.7298, name: '강원' },  // 춘천시청
 ];
 
 // 지도 중심 좌표로 가장 가까운 지역코드 추정
@@ -211,6 +211,20 @@ export function filterByBounds(stations, bounds) {
   );
 }
 
+// 메모리 캐시 (지역코드별, 3분 TTL)
+const _cache = new Map();
+const CACHE_TTL = 3 * 60 * 1000;
+
+function getCached(key) {
+  const e = _cache.get(key);
+  if (e && Date.now() - e.ts < CACHE_TTL) return e.data;
+  return null;
+}
+function setCache(key, data) {
+  _cache.set(key, { data, ts: Date.now() });
+  if (_cache.size > 30) _cache.delete(_cache.keys().next().value);
+}
+
 // 공공데이터 API 호출 (지역코드 기반)
 // API 파라미터: zcode = 시도코드(2자리), zscode = 시군구코드(5자리)
 export async function fetchChargers({ zscode, region, numOfRows = 9999, pageNo = 1 } = {}) {
@@ -228,6 +242,14 @@ export async function fetchChargers({ zscode, region, numOfRows = 9999, pageNo =
     } else {
       params.set('zscode', code);
     }
+  }
+
+  // 캐시 확인
+  const cacheKey = `${code}_${pageNo}`;
+  const cached = getCached(cacheKey);
+  if (cached) {
+    console.log('[API] 캐시 사용:', cacheKey, '충전소:', cached.stations.length);
+    return cached;
   }
 
   const url = `${BASE_URL}/getChargerInfo?${params.toString()}`;
@@ -266,7 +288,9 @@ export async function fetchChargers({ zscode, region, numOfRows = 9999, pageNo =
   const stations = groupByStation(items);
   console.log('[API] 그룹핑된 충전소 수:', stations.length);
 
-  return { totalCount, stations, pageNo, numOfRows };
+  const result = { totalCount, stations, pageNo, numOfRows };
+  setCache(cacheKey, result);
+  return result;
 }
 
 // 지도 바운드 기반 충전소 조회 (보이는 지역 모두 fetch)
