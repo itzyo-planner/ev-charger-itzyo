@@ -121,49 +121,51 @@ export default function StationDetail({ station, onClose }) {
               길찾기
             </h3>
             <div className="flex gap-2">
-              <a
-                href={`tmap://route?goalname=${encodeURIComponent(station.name)}&goalx=${station.lng}&goaly=${station.lat}`}
-                className="flex-1 flex items-center justify-center gap-1.5 bg-blue-600 text-white rounded-lg py-2.5 text-xs font-semibold active:bg-blue-700 transition-colors"
-                onClick={(e) => {
-                  // 모바일 앱이 없으면 웹으로 fallback
-                  setTimeout(() => {
-                    window.open(`https://apis.openapi.sk.com/tmap/app/routes?appKey=&name=${encodeURIComponent(station.name)}&lon=${station.lng}&lat=${station.lat}`, '_blank');
-                  }, 500);
+              <button
+                onClick={() => {
+                  const appUrl = `tmap://route?goalname=${encodeURIComponent(station.name)}&goalx=${station.lng}&goaly=${station.lat}`;
+                  const webUrl = `https://tmap.life/navigate?goalx=${station.lng}&goaly=${station.lat}&goalname=${encodeURIComponent(station.name)}`;
+                  const start = Date.now();
+                  window.location.href = appUrl;
+                  setTimeout(() => { if (Date.now() - start < 1500) window.open(webUrl, '_blank'); }, 1000);
                 }}
+                className="flex-1 flex items-center justify-center gap-1.5 bg-blue-600 text-white rounded-lg py-2.5 text-xs font-semibold active:bg-blue-700 transition-colors"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
                 </svg>
                 T맵
-              </a>
-              <a
-                href={`nmap://route/car?dlat=${station.lat}&dlng=${station.lng}&dname=${encodeURIComponent(station.name)}&appname=ev.itzyo`}
-                className="flex-1 flex items-center justify-center gap-1.5 bg-green-600 text-white rounded-lg py-2.5 text-xs font-semibold active:bg-green-700 transition-colors"
-                onClick={(e) => {
-                  setTimeout(() => {
-                    window.open(`https://map.naver.com/p/directions/-/-/${station.lng},${station.lat},${encodeURIComponent(station.name)}/-/car`, '_blank');
-                  }, 500);
+              </button>
+              <button
+                onClick={() => {
+                  const appUrl = `nmap://navigation?dlat=${station.lat}&dlng=${station.lng}&dname=${encodeURIComponent(station.name)}&appname=ev.itzyo`;
+                  const webUrl = `https://map.naver.com/v5/directions/-/-/${station.lng},${station.lat},${encodeURIComponent(station.name)}/-/car`;
+                  const start = Date.now();
+                  window.location.href = appUrl;
+                  setTimeout(() => { if (Date.now() - start < 1500) window.open(webUrl, '_blank'); }, 1000);
                 }}
+                className="flex-1 flex items-center justify-center gap-1.5 bg-green-600 text-white rounded-lg py-2.5 text-xs font-semibold active:bg-green-700 transition-colors"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
                 </svg>
                 네이버내비
-              </a>
-              <a
-                href={`kakaomap://route?ep=${station.lat},${station.lng}&by=CAR`}
-                className="flex-1 flex items-center justify-center gap-1.5 bg-yellow-500 text-gray-900 rounded-lg py-2.5 text-xs font-semibold active:bg-yellow-600 transition-colors"
-                onClick={(e) => {
-                  setTimeout(() => {
-                    window.open(`https://map.kakao.com/link/to/${encodeURIComponent(station.name)},${station.lat},${station.lng}`, '_blank');
-                  }, 500);
+              </button>
+              <button
+                onClick={() => {
+                  const appUrl = `kakaomap://route?ep=${station.lat},${station.lng}&by=CAR`;
+                  const webUrl = `https://map.kakao.com/link/to/${encodeURIComponent(station.name)},${station.lat},${station.lng}`;
+                  const start = Date.now();
+                  window.location.href = appUrl;
+                  setTimeout(() => { if (Date.now() - start < 1500) window.open(webUrl, '_blank'); }, 1000);
                 }}
+                className="flex-1 flex items-center justify-center gap-1.5 bg-yellow-500 text-gray-900 rounded-lg py-2.5 text-xs font-semibold active:bg-yellow-600 transition-colors"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
                 </svg>
                 카카오맵
-              </a>
+              </button>
             </div>
           </div>
 
