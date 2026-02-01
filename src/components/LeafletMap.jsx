@@ -341,6 +341,7 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
           const lng = pos.coords.longitude;
           map.setView([lat, lng], 13);
           addMyLocationMarker(map, lat, lng);
+          callFetch();
         },
         () => {
           callFetch();
