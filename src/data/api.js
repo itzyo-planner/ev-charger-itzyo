@@ -318,29 +318,19 @@ export async function fetchChargersInMapBounds({ centerLat, centerLng, bounds, n
   // 지도 바운드 안에 중심이 들어오는 모든 지역 찾기
   const visibleRegions = getVisibleRegions(bounds);
 
-  // 항상 지도 중심에서 가장 가까운 지역 포함 (경계 문제 해결)
-  const closestCode = estimateRegionCode(centerLat, centerLng);
+  // 모든 지역을 거리순으로 정렬
   const regionCodes = new Set(visibleRegions.map(r => r.code));
-  if (!regionCodes.has(closestCode)) {
-    const closestRegion = REGION_BOUNDS.find(r => r.code === closestCode);
-    if (closestRegion) {
-      visibleRegions.push(closestRegion);
-      regionCodes.add(closestCode);
-    }
-  }
-
-  // 반경 기반으로 인접 지역 추가 (반경 + 30km 여유, 최대 3개 지역)
-  const searchDist = (radiusKm || 10) + 30;
-  const nearbyRegions = REGION_BOUNDS
-    .filter(r => !regionCodes.has(r.code))
+  const allByDist = REGION_BOUNDS
     .map(r => ({ ...r, dist: distanceKm(centerLat, centerLng, r.lat, r.lng) }))
-    .filter(r => r.dist < searchDist)
     .sort((a, b) => a.dist - b.dist);
 
-  for (const region of nearbyRegions) {
-    if (visibleRegions.length >= 3) break; // 최대 3개 지역만
-    visibleRegions.push(region);
-    regionCodes.add(region.code);
+  // 항상 가장 가까운 2개 지역은 무조건 포함 (행정구역 중심이 멀어도 커버)
+  for (const region of allByDist) {
+    if (visibleRegions.length >= 2) break;
+    if (!regionCodes.has(region.code)) {
+      visibleRegions.push(region);
+      regionCodes.add(region.code);
+    }
   }
 
   console.log('[fetchChargersInMapBounds] fetch 지역:', visibleRegions.map(r => r.name).join(', '));
