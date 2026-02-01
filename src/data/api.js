@@ -212,7 +212,7 @@ export function filterByBounds(stations, bounds) {
 }
 
 // 공공데이터 API 호출 (zscode 기반)
-export async function fetchChargers({ zscode, region, numOfRows = 100, pageNo = 1 } = {}) {
+export async function fetchChargers({ zscode, region, numOfRows = 9999, pageNo = 1 } = {}) {
   const params = new URLSearchParams({
     serviceKey: SERVICE_KEY,
     pageNo: String(pageNo),
@@ -227,21 +227,28 @@ export async function fetchChargers({ zscode, region, numOfRows = 100, pageNo = 
   }
 
   const url = `${BASE_URL}/getChargerInfo?${params.toString()}`;
+  console.log('[API] 요청 URL:', url);
 
   const response = await fetch(url);
+  console.log('[API] 응답 상태:', response.status, response.statusText);
   if (!response.ok) {
+    const errorBody = await response.text();
+    console.error('[API] 에러 응답:', errorBody.substring(0, 500));
     throw new Error(`API 호출 실패: ${response.status}`);
   }
 
   const xml = await response.text();
+  console.log('[API] 응답 크기:', xml.length, '바이트, 미리보기:', xml.substring(0, 300));
 
   const resultCode = getTagValue(xml, 'resultCode');
   if (resultCode && resultCode !== '00') {
     const resultMsg = getTagValue(xml, 'resultMsg');
+    console.error('[API] API 에러:', resultCode, resultMsg);
     throw new Error(`API 에러: ${resultCode} - ${resultMsg}`);
   }
 
   const totalCount = parseInt(getTagValue(xml, 'totalCount')) || 0;
+  console.log('[API] 전체 건수:', totalCount);
 
   const itemRegex = /<item>([\s\S]*?)<\/item>/g;
   const items = [];
@@ -250,40 +257,34 @@ export async function fetchChargers({ zscode, region, numOfRows = 100, pageNo = 
     const parsed = parseItem(match[1]);
     if (parsed) items.push(parsed);
   }
+  console.log('[API] 파싱된 충전기 수:', items.length);
 
   const stations = groupByStation(items);
+  console.log('[API] 그룹핑된 충전소 수:', stations.length);
 
   return { totalCount, stations, pageNo, numOfRows };
 }
 
 // 지도 바운드 기반 충전소 조회 (중심 좌표로 지역 추정 → API 호출 → 바운드 필터)
-export async function fetchChargersInMapBounds({ centerLat, centerLng, bounds, numOfRows = 100, zscodeOverride } = {}) {
+export async function fetchChargersInMapBounds({ centerLat, centerLng, bounds, numOfRows = 9999, zscodeOverride, skipBoundsFilter = false } = {}) {
   const zscode = zscodeOverride || estimateRegionCode(centerLat, centerLng);
+  console.log('[fetchChargersInMapBounds] zscode:', zscode, 'zscodeOverride:', zscodeOverride, 'skipBoundsFilter:', skipBoundsFilter);
 
-  // 2페이지까지 병렬 조회
-  const [page1, page2] = await Promise.all([
-    fetchChargers({ zscode, numOfRows, pageNo: 1 }),
-    fetchChargers({ zscode, numOfRows, pageNo: 2 }).catch(() => ({ stations: [] })),
-  ]);
+  // 한 번에 최대한 많이 가져오기 (numOfRows=9999)
+  const result = await fetchChargers({ zscode, numOfRows, pageNo: 1 });
 
-  let allStations = [...page1.stations, ...page2.stations];
+  let allStations = result.stations;
+  console.log('[fetchChargersInMapBounds] API에서 받은 충전소 수:', allStations.length);
 
-  // 중복 제거 (같은 statId)
-  const uniqueMap = new Map();
-  allStations.forEach((s) => {
-    if (!uniqueMap.has(s.statId) || s.chargerCount > uniqueMap.get(s.statId).chargerCount) {
-      uniqueMap.set(s.statId, s);
-    }
-  });
-  allStations = Array.from(uniqueMap.values());
-
-  // 바운드 필터
-  if (bounds) {
+  // 지역 검색인 경우 bounds 필터 건너뛰기 (API가 이미 지역 필터링함)
+  if (!skipBoundsFilter && bounds) {
+    const beforeFilter = allStations.length;
     allStations = filterByBounds(allStations, bounds);
+    console.log('[fetchChargersInMapBounds] bounds 필터:', beforeFilter, '→', allStations.length);
   }
 
   return {
-    totalCount: page1.totalCount,
+    totalCount: result.totalCount,
     stations: allStations,
     zscode,
   };

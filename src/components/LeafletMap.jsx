@@ -95,6 +95,9 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
     });
   }, [filterStations, onMapUpdate, onSelectStation]);
 
+  // 지역 검색 여부를 ref로 관리 (bounds 필터 건너뛰기 용)
+  const isRegionSearchRef = useRef(false);
+
   // API 호출 + 마커 렌더링
   const fetchAndRender = useCallback(async () => {
     const map = mapInstanceRef.current;
@@ -113,6 +116,11 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
     // 사용자가 지역을 선택한 경우 해당 지역코드를 직접 사용
     const selectedRegion = filtersRef.current.region;
     const zscodeOverride = selectedRegion ? REGION_CODE_MAP[selectedRegion] : undefined;
+    const skipBoundsFilter = isRegionSearchRef.current;
+    isRegionSearchRef.current = false; // 한 번 사용 후 리셋
+
+    console.log('[fetchAndRender] 시작 - region:', selectedRegion, 'zscodeOverride:', zscodeOverride, 'skipBoundsFilter:', skipBoundsFilter);
+    console.log('[fetchAndRender] 지도 중심:', mapCenter.lat, mapCenter.lng, '줌:', map.getZoom());
 
     const requestId = Date.now();
     fetchControllerRef.current = requestId;
@@ -125,17 +133,18 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
         centerLat: mapCenter.lat,
         centerLng: mapCenter.lng,
         bounds,
-        numOfRows: 100,
         zscodeOverride,
+        skipBoundsFilter,
       });
 
       if (fetchControllerRef.current !== requestId) return;
 
+      console.log('[fetchAndRender] 결과 충전소 수:', result.stations.length);
       cachedStationsRef.current = result.stations;
       renderMarkers(result.stations);
     } catch (err) {
       if (fetchControllerRef.current !== requestId) return;
-      console.error('충전소 API 조회 실패:', err);
+      console.error('[fetchAndRender] 충전소 API 조회 실패:', err);
       onErrorChange('충전소 데이터를 불러오지 못했습니다.');
       if (cachedStationsRef.current.length > 0) {
         renderMarkers(cachedStationsRef.current);
@@ -269,18 +278,36 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
     const map = mapInstanceRef.current;
     if (!map) return;
 
+    console.log('[검색 트리거] searchTrigger:', searchTrigger, 'region:', filters.region);
+
     // 기존 디바운스 타이머 취소 (중복 fetch 방지)
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
 
+    // 지역 검색 플래그 설정 (bounds 필터 건너뛰기)
+    isRegionSearchRef.current = true;
+
     const regionCenter = getRegionCenter(filters.region);
     if (regionCenter) {
-      // 지역 중심으로 이동 후 직접 fetch (moveend에 의존하지 않음)
-      map.once('moveend', () => {
+      console.log('[검색 트리거] 지역 중심으로 이동:', regionCenter);
+      const currentCenter = map.getCenter();
+      const dist = Math.abs(currentCenter.lat - regionCenter.lat) + Math.abs(currentCenter.lng - regionCenter.lng);
+
+      if (dist < 0.01) {
+        // 이미 해당 지역 근처 → 바로 fetch (moveend 안 발생할 수 있음)
+        console.log('[검색 트리거] 이미 근처에 있어서 바로 fetch');
         if (fetchAndRenderRef.current) fetchAndRenderRef.current();
-      });
-      map.setView([regionCenter.lat, regionCenter.lng], 11);
+      } else {
+        // 지역 중심으로 이동 → moveend 후 fetch
+        map.once('moveend', () => {
+          console.log('[검색 트리거] moveend 발생 → fetch 실행');
+          if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+          if (fetchAndRenderRef.current) fetchAndRenderRef.current();
+        });
+        map.setView([regionCenter.lat, regionCenter.lng], 11);
+      }
     } else {
       // 지역 미선택 시 현재 위치에서 바로 fetch
+      console.log('[검색 트리거] 지역 미선택 → 현재 위치에서 fetch');
       if (fetchAndRenderRef.current) fetchAndRenderRef.current();
     }
   }, [searchTrigger]); // eslint-disable-line react-hooks/exhaustive-deps
