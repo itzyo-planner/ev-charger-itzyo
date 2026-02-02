@@ -253,28 +253,21 @@ export async function fetchChargers({ zscode, region, numOfRows = 9999, pageNo =
   }
 
   const url = `${BASE_URL}/getChargerInfo?${params.toString()}`;
-  console.log('[API] 요청 URL:', url);
 
   const response = await fetch(url);
-  console.log('[API] 응답 상태:', response.status, response.statusText);
   if (!response.ok) {
-    const errorBody = await response.text();
-    console.error('[API] 에러 응답:', errorBody.substring(0, 500));
     throw new Error(`API 호출 실패: ${response.status}`);
   }
 
   const xml = await response.text();
-  console.log('[API] 응답 크기:', xml.length, '바이트, 미리보기:', xml.substring(0, 300));
 
   const resultCode = getTagValue(xml, 'resultCode');
   if (resultCode && resultCode !== '00') {
     const resultMsg = getTagValue(xml, 'resultMsg');
-    console.error('[API] API 에러:', resultCode, resultMsg);
     throw new Error(`API 에러: ${resultCode} - ${resultMsg}`);
   }
 
   const totalCount = parseInt(getTagValue(xml, 'totalCount')) || 0;
-  console.log('[API] 전체 건수:', totalCount);
 
   const itemRegex = /<item>([\s\S]*?)<\/item>/g;
   const items = [];
@@ -283,10 +276,8 @@ export async function fetchChargers({ zscode, region, numOfRows = 9999, pageNo =
     const parsed = parseItem(match[1]);
     if (parsed) items.push(parsed);
   }
-  console.log('[API] 파싱된 충전기 수:', items.length);
 
   const stations = groupByStation(items);
-  console.log('[API] 그룹핑된 충전소 수:', stations.length);
 
   const result = { totalCount, stations, pageNo, numOfRows };
   setCache(cacheKey, result);
@@ -334,7 +325,7 @@ export async function fetchChargersInMapBounds({ centerLat, centerLng, bounds, n
     }
   }
 
-  console.log('[fetchChargersInMapBounds] fetch 지역:', visibleRegions.map(r => r.name).join(', '));
+  // console.log('[fetch] 지역:', visibleRegions.map(r => r.name).join(', '));
 
   if (visibleRegions.length === 0) {
     const fallbackCode = allByDist[0]?.code || '11';
@@ -345,7 +336,7 @@ export async function fetchChargersInMapBounds({ centerLat, centerLng, bounds, n
     } else if (!skipBoundsFilter && bounds) {
       stations = filterByBounds(stations, bounds);
     }
-    return { totalCount: result.totalCount, stations, zscode: closestCode };
+    return { totalCount: result.totalCount, stations, zscode: fallbackCode };
   }
 
   // 보이는 지역 모두 병렬 fetch
@@ -359,17 +350,12 @@ export async function fetchChargersInMapBounds({ centerLat, centerLng, bounds, n
   // 모든 결과 합치기
   let allStations = results.flatMap(r => r.stations);
   const totalCount = results.reduce((sum, r) => sum + r.totalCount, 0);
-  console.log('[fetchChargersInMapBounds] 전체 충전소:', allStations.length, '(', visibleRegions.length, '개 지역)');
 
   // 반경 필터 (radiusKm 지정된 경우)
   if (radiusKm) {
-    const before = allStations.length;
     allStations = allStations.filter(s => distanceKm(centerLat, centerLng, s.lat, s.lng) <= radiusKm);
-    console.log('[fetchChargersInMapBounds] 반경 필터 (' + radiusKm + 'km):', before, '→', allStations.length);
   } else if (!skipBoundsFilter && bounds) {
-    const before = allStations.length;
     allStations = filterByBounds(allStations, bounds);
-    console.log('[fetchChargersInMapBounds] bounds 필터:', before, '→', allStations.length);
   }
 
   return { totalCount, stations: allStations, zscode: visibleRegions[0]?.code };

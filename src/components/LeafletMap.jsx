@@ -190,8 +190,6 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
 
     const useRadius = radiusModeRef.current;
     const currentRadiusKm = radiusKmRef.current;
-    const zoom = map.getZoom();
-    console.log('[fetchAndRender] 줌:', zoom, 'region:', selectedRegion, '반경모드:', useRadius, currentRadiusKm, 'km');
 
     const requestId = Date.now();
     fetchControllerRef.current = requestId;
@@ -228,7 +226,6 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
 
       if (fetchControllerRef.current !== requestId) return;
 
-      console.log('[fetchAndRender] 결과:', result.stations.length, '개 충전소');
       cachedStationsRef.current = result.stations;
       renderMarkers(result.stations);
     } catch (err) {
@@ -377,7 +374,7 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
     const map = mapInstanceRef.current;
     if (!map) return;
 
-    console.log('[검색 트리거] region:', filters.region);
+    // 검색 트리거
 
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     isRegionSearchRef.current = true;
