@@ -212,9 +212,29 @@ export default function StationDetail({ station, onClose }) {
               <DetailRow label="연락처" value={station.phone || '-'} isPhone />
               <DetailRow label="충전요금" value={pricing ? '유료' : '-'} />
               {pricing && (
-                <div className="flex gap-3 px-4 pb-3 text-xs border-b border-gray-100">
-                  <span className="text-amber-700">회원 <b>{formatPrice(pricing.member)}/kWh</b></span>
-                  <span className="text-orange-600">비회원 <b>{formatPrice(pricing.nonMember)}/kWh</b></span>
+                <div className="border-b border-gray-100 px-4 py-2.5">
+                  <div className="grid grid-cols-3 gap-1 text-[11px] mb-1.5">
+                    <div></div>
+                    <div className="text-center font-semibold text-gray-500">회원</div>
+                    <div className="text-center font-semibold text-gray-500">비회원</div>
+                  </div>
+                  {(pricing.memberFast !== null || pricing.nonMemberFast !== null) && (
+                    <div className="grid grid-cols-3 gap-1 text-[11px] mb-1">
+                      <div className="font-semibold text-red-600">급속</div>
+                      <div className="text-center text-amber-700 font-bold">{pricing.memberFast !== null ? `${formatPrice(pricing.memberFast)}/kWh` : '-'}</div>
+                      <div className="text-center text-orange-600 font-bold">{pricing.nonMemberFast !== null ? `${formatPrice(pricing.nonMemberFast)}/kWh` : '-'}</div>
+                    </div>
+                  )}
+                  {(pricing.memberSlow !== null || pricing.nonMemberSlow !== null) && (
+                    <div className="grid grid-cols-3 gap-1 text-[11px] mb-1">
+                      <div className="font-semibold text-blue-600">완속</div>
+                      <div className="text-center text-amber-700 font-bold">{pricing.memberSlow !== null ? `${formatPrice(pricing.memberSlow)}/kWh` : '-'}</div>
+                      <div className="text-center text-orange-600 font-bold">{pricing.nonMemberSlow !== null ? `${formatPrice(pricing.nonMemberSlow)}/kWh` : '-'}</div>
+                    </div>
+                  )}
+                  {pricing.updatedAt && (
+                    <div className="text-[10px] text-gray-400 text-right mt-1">수정일: {pricing.updatedAt}</div>
+                  )}
                 </div>
               )}
               <DetailRow label="주차요금" value={station.parkingFree ? '무료' : '유료'} />
