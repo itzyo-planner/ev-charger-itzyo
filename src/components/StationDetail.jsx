@@ -19,8 +19,29 @@ const STATUS_STYLE = {
 
 function formatDateTime(dt) {
   if (!dt || dt.length < 14) return '';
-  // "20260124170300" → "2026.01.24 17:03"
   return `${dt.slice(0,4)}.${dt.slice(4,6)}.${dt.slice(6,8)} ${dt.slice(8,10)}:${dt.slice(10,12)}`;
+}
+
+// 플랫폼 감지
+function isAndroid() { return /android/i.test(navigator.userAgent); }
+function isIOS() { return /iphone|ipad|ipod/i.test(navigator.userAgent); }
+
+// 내비 앱 실행 헬퍼
+function openNavApp({ appScheme, androidIntent, iosAppStore, webUrl }) {
+  if (isAndroid() && androidIntent) {
+    window.location.href = androidIntent;
+  } else if (isIOS()) {
+    const start = Date.now();
+    window.location.href = appScheme;
+    setTimeout(() => {
+      if (document.hidden) return;
+      if (Date.now() - start < 2000 && iosAppStore) {
+        window.location.href = iosAppStore;
+      }
+    }, 1500);
+  } else {
+    window.open(webUrl, '_blank');
+  }
 }
 
 export default function StationDetail({ station, onClose }) {
@@ -28,6 +49,36 @@ export default function StationDetail({ station, onClose }) {
 
   const chargers = station.chargers || [];
   const pricing = getPricing(station.operator);
+
+  const openTmap = () => {
+    const name = encodeURIComponent(station.name);
+    openNavApp({
+      appScheme: `tmap://route?goalname=${name}&goalx=${station.lng}&goaly=${station.lat}`,
+      androidIntent: `intent://route?goalname=${name}&goalx=${station.lng}&goaly=${station.lat}#Intent;scheme=tmap;package=com.skt.tmap.ku;end`,
+      iosAppStore: 'https://apps.apple.com/kr/app/id431589174',
+      webUrl: `https://tmap.life/navigate?goalx=${station.lng}&goaly=${station.lat}&goalname=${name}`,
+    });
+  };
+
+  const openNaver = () => {
+    const name = encodeURIComponent(station.name);
+    openNavApp({
+      appScheme: `nmap://navigation?dlat=${station.lat}&dlng=${station.lng}&dname=${name}&appname=ev.itzyo`,
+      androidIntent: `intent://navigation?dlat=${station.lat}&dlng=${station.lng}&dname=${name}&appname=ev.itzyo#Intent;scheme=nmap;package=com.nhn.android.nmap;end`,
+      iosAppStore: 'https://apps.apple.com/kr/app/id311867728',
+      webUrl: `https://map.naver.com/v5/directions/-/-/${station.lng},${station.lat},${name}/-/car`,
+    });
+  };
+
+  const openKakao = () => {
+    const name = encodeURIComponent(station.name);
+    openNavApp({
+      appScheme: `kakaomap://route?ep=${station.lat},${station.lng}&by=CAR`,
+      androidIntent: `intent://route?ep=${station.lat},${station.lng}&by=CAR#Intent;scheme=kakaomap;package=net.daum.android.map;end`,
+      iosAppStore: 'https://apps.apple.com/kr/app/id304608425',
+      webUrl: `https://map.kakao.com/link/to/${name},${station.lat},${station.lng}`,
+    });
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center">
@@ -62,6 +113,39 @@ export default function StationDetail({ station, onClose }) {
               </svg>
               이용가능시간 : {station.useTime || '정보없음'}
             </span>
+          </div>
+
+          {/* 길찾기 버튼 — 충전기 위에 배치 */}
+          <div className="px-4 pb-3">
+            <div className="flex gap-2">
+              <button
+                onClick={openTmap}
+                className="flex-1 flex items-center justify-center gap-1.5 bg-blue-600 text-white rounded-lg py-3 text-sm font-semibold active:bg-blue-700 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                </svg>
+                T맵
+              </button>
+              <button
+                onClick={openNaver}
+                className="flex-1 flex items-center justify-center gap-1.5 bg-green-600 text-white rounded-lg py-3 text-sm font-semibold active:bg-green-700 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                </svg>
+                네이버내비
+              </button>
+              <button
+                onClick={openKakao}
+                className="flex-1 flex items-center justify-center gap-1.5 bg-yellow-500 text-gray-900 rounded-lg py-3 text-sm font-semibold active:bg-yellow-600 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                </svg>
+                카카오맵
+              </button>
+            </div>
           </div>
 
           {/* 충전기 섹션 */}
@@ -109,63 +193,6 @@ export default function StationDetail({ station, onClose }) {
                   )}
                 </tbody>
               </table>
-            </div>
-          </div>
-
-          {/* 길찾기 버튼 */}
-          <div className="px-4 pb-3">
-            <h3 className="text-sm font-bold text-gray-900 mb-2 flex items-center gap-1.5">
-              <svg className="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-              </svg>
-              길찾기
-            </h3>
-            <div className="flex gap-2">
-              <button
-                onClick={() => {
-                  const appUrl = `tmap://route?goalname=${encodeURIComponent(station.name)}&goalx=${station.lng}&goaly=${station.lat}`;
-                  const webUrl = `https://tmap.life/navigate?goalx=${station.lng}&goaly=${station.lat}&goalname=${encodeURIComponent(station.name)}`;
-                  const start = Date.now();
-                  window.location.href = appUrl;
-                  setTimeout(() => { if (Date.now() - start < 1500) window.open(webUrl, '_blank'); }, 1000);
-                }}
-                className="flex-1 flex items-center justify-center gap-1.5 bg-blue-600 text-white rounded-lg py-2.5 text-xs font-semibold active:bg-blue-700 transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                </svg>
-                T맵
-              </button>
-              <button
-                onClick={() => {
-                  const appUrl = `nmap://navigation?dlat=${station.lat}&dlng=${station.lng}&dname=${encodeURIComponent(station.name)}&appname=ev.itzyo`;
-                  const webUrl = `https://map.naver.com/v5/directions/-/-/${station.lng},${station.lat},${encodeURIComponent(station.name)}/-/car`;
-                  const start = Date.now();
-                  window.location.href = appUrl;
-                  setTimeout(() => { if (Date.now() - start < 1500) window.open(webUrl, '_blank'); }, 1000);
-                }}
-                className="flex-1 flex items-center justify-center gap-1.5 bg-green-600 text-white rounded-lg py-2.5 text-xs font-semibold active:bg-green-700 transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                </svg>
-                네이버내비
-              </button>
-              <button
-                onClick={() => {
-                  const appUrl = `kakaomap://route?ep=${station.lat},${station.lng}&by=CAR`;
-                  const webUrl = `https://map.kakao.com/link/to/${encodeURIComponent(station.name)},${station.lat},${station.lng}`;
-                  const start = Date.now();
-                  window.location.href = appUrl;
-                  setTimeout(() => { if (Date.now() - start < 1500) window.open(webUrl, '_blank'); }, 1000);
-                }}
-                className="flex-1 flex items-center justify-center gap-1.5 bg-yellow-500 text-gray-900 rounded-lg py-2.5 text-xs font-semibold active:bg-yellow-600 transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                </svg>
-                카카오맵
-              </button>
             </div>
           </div>
 

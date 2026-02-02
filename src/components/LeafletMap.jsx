@@ -51,24 +51,8 @@ const STATUS_COLORS = {
   restricted: '#A855F7',
 };
 
-// API 캐시 (지역코드 → {data, timestamp})
-const apiCache = new Map();
-const CACHE_TTL = 3 * 60 * 1000; // 3분
-
-function getCached(key) {
-  const entry = apiCache.get(key);
-  if (entry && Date.now() - entry.timestamp < CACHE_TTL) return entry.data;
-  return null;
-}
-
-function setCache(key, data) {
-  apiCache.set(key, { data, timestamp: Date.now() });
-  // 캐시 크기 제한 (최대 30개)
-  if (apiCache.size > 30) {
-    const oldest = apiCache.keys().next().value;
-    apiCache.delete(oldest);
-  }
-}
+// 반경 프리셋 옵션
+const RADIUS_OPTIONS = [5, 10, 25, 50, 100, 300];
 
 // 원형 마커 아이콘 생성
 function createMarkerIcon(color, count) {
@@ -101,6 +85,11 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
   const fetchAndRenderRef = useRef(null);
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
+
+  // 반경 모드 (ON) vs 지도 영역 모드 (OFF)
+  const [radiusMode, setRadiusMode] = useState(true);
+  const radiusModeRef = useRef(radiusMode);
+  radiusModeRef.current = radiusMode;
 
   // 반경 (km)
   const [radiusKm, setRadiusKm] = useState(10);
@@ -199,9 +188,10 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
     const skipBoundsFilter = isRegionSearchRef.current;
     isRegionSearchRef.current = false;
 
-    const zoom = map.getZoom();
+    const useRadius = radiusModeRef.current;
     const currentRadiusKm = radiusKmRef.current;
-    console.log('[fetchAndRender] 줌:', zoom, 'region:', selectedRegion, '반경:', currentRadiusKm, 'km');
+    const zoom = map.getZoom();
+    console.log('[fetchAndRender] 줌:', zoom, 'region:', selectedRegion, '반경모드:', useRadius, currentRadiusKm, 'km');
 
     const requestId = Date.now();
     fetchControllerRef.current = requestId;
@@ -209,12 +199,12 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
     onLoadingChange(true);
     onErrorChange(null);
 
-    // 반경 원 표시
+    // 반경 원 표시/제거
     if (radiusCircleRef.current) {
       map.removeLayer(radiusCircleRef.current);
       radiusCircleRef.current = null;
     }
-    if (!zscodeOverride) {
+    if (useRadius && !zscodeOverride) {
       radiusCircleRef.current = L.circle([mapCenter.lat, mapCenter.lng], {
         radius: currentRadiusKm * 1000,
         color: '#3B82F6',
@@ -233,7 +223,7 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
         bounds,
         zscodeOverride,
         skipBoundsFilter,
-        radiusKm: zscodeOverride ? undefined : currentRadiusKm,
+        radiusKm: (useRadius && !zscodeOverride) ? currentRadiusKm : undefined,
       });
 
       if (fetchControllerRef.current !== requestId) return;
@@ -278,7 +268,7 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
     myLocationRef.current = { lat, lng };
   }, []);
 
-  // "현위치에서 조회" — 현재 지도 위치 기준으로 충전소 검색 (줌 무관)
+  // 조회 버튼
   const searchHere = useCallback(() => {
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     if (fetchAndRenderRef.current) fetchAndRenderRef.current();
@@ -351,14 +341,19 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
       callFetch();
     }
 
-    // moveend에서는 자동 fetch하지 않음 (속도 개선)
-    // 사용자가 "조회" 버튼을 눌러야 fetch
-    // 단, 반경 원만 업데이트
+    // moveend: 반경모드 OFF일 때만 자동 fetch (디바운스)
     map.on('moveend', () => {
-      // 반경 원 위치만 업데이트
+      // 반경 원 위치 업데이트
       const mc = map.getCenter();
       if (radiusCircleRef.current) {
         radiusCircleRef.current.setLatLng([mc.lat, mc.lng]);
+      }
+      // 반경모드 OFF → 지도 이동 시 자동 fetch
+      if (!radiusModeRef.current) {
+        if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = setTimeout(() => {
+          callFetch();
+        }, 800);
       }
     });
 
@@ -414,47 +409,91 @@ export default function LeafletMap({ center, filters, selectedStation, onSelectS
     }
   }, [selectedStation]);
 
-  // 반경 변경 핸들러
-  const handleRadiusChange = useCallback((e) => {
-    const val = parseInt(e.target.value);
-    setRadiusKm(val);
-    radiusKmRef.current = val;
+  // 반경 모드 토글
+  const toggleRadiusMode = useCallback(() => {
+    setRadiusMode(prev => {
+      const next = !prev;
+      radiusModeRef.current = next;
+      // 반경 끄면 원 제거하고 바로 지도 영역 기준으로 fetch
+      if (!next) {
+        const map = mapInstanceRef.current;
+        if (radiusCircleRef.current && map) {
+          map.removeLayer(radiusCircleRef.current);
+          radiusCircleRef.current = null;
+        }
+      }
+      // 토글 후 바로 fetch
+      setTimeout(() => {
+        if (fetchAndRenderRef.current) fetchAndRenderRef.current();
+      }, 50);
+      return next;
+    });
+  }, []);
+
+  // 반경 선택 핸들러
+  const selectRadius = useCallback((km) => {
+    setRadiusKm(km);
+    radiusKmRef.current = km;
+    // 선택 후 바로 조회
+    setTimeout(() => {
+      if (fetchAndRenderRef.current) fetchAndRenderRef.current();
+    }, 50);
   }, []);
 
   return (
     <div className="relative w-full h-full">
       <div ref={mapRef} className="w-full h-full" />
 
-      {/* 반경 조절 + 조회 버튼 — 좌측 하단 세로 배치 */}
+      {/* 좌측 하단: 반경 컨트롤 */}
       <div
-        className="absolute z-[1000] flex flex-col items-center gap-1 bg-white rounded-xl shadow-lg px-2 py-2"
+        className="absolute z-[1000] flex flex-col items-center gap-1.5 bg-white rounded-xl shadow-lg px-1.5 py-2"
         style={{ left: '10px', bottom: 'calc(60px + var(--sab))' }}
       >
-        <span className="text-[10px] text-gray-500 font-medium">반경</span>
-        <input
-          type="range"
-          min="3"
-          max="50"
-          step="1"
-          value={radiusKm}
-          onChange={handleRadiusChange}
-          className="h-20 accent-blue-600"
-          style={{ writingMode: 'vertical-lr', direction: 'rtl', width: '20px' }}
-        />
-        <span className="text-[11px] text-blue-600 font-bold">{radiusKm}km</span>
+        {/* 반경 ON/OFF 토글 */}
         <button
-          onClick={searchHere}
-          className="touch-btn bg-blue-600 text-white rounded-lg shadow px-2 py-1.5 text-[10px] font-bold hover:bg-blue-700 active:bg-blue-800 transition-colors flex items-center gap-0.5"
+          onClick={toggleRadiusMode}
+          className={`w-full px-2 py-1 rounded-lg text-[10px] font-bold transition-colors ${
+            radiusMode
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-200 text-gray-600'
+          }`}
         >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="11" cy="11" r="8"/>
-            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-          </svg>
-          조회
+          반경 {radiusMode ? 'ON' : 'OFF'}
         </button>
+
+        {/* 반경 ON일 때: 프리셋 버튼들 */}
+        {radiusMode && (
+          <>
+            <div className="flex flex-col gap-0.5">
+              {RADIUS_OPTIONS.map((km) => (
+                <button
+                  key={km}
+                  onClick={() => selectRadius(km)}
+                  className={`px-2 py-1 rounded text-[10px] font-semibold transition-colors ${
+                    radiusKm === km
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {km}km
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={searchHere}
+              className="touch-btn w-full bg-blue-600 text-white rounded-lg shadow px-2 py-1.5 text-[10px] font-bold hover:bg-blue-700 active:bg-blue-800 transition-colors flex items-center justify-center gap-0.5"
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8"/>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+              조회
+            </button>
+          </>
+        )}
       </div>
 
-      {/* 내 위치 버튼 — 우측 하단 */}
+      {/* 우측 하단: 내 위치 버튼 */}
       <button
         onClick={goToMyLocation}
         className="touch-btn absolute z-[1000] bg-white rounded-lg shadow-lg p-2.5 hover:bg-gray-50 active:bg-gray-100 transition-colors"
